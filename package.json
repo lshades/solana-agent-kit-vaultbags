@@ -1,0 +1,51 @@
+{
+  "name": "solana-agent-kit-vaultbags",
+  "version": "0.1.0",
+  "description": "Solana Agent Kit v2 plugin for VaultBags: read the autonomous RWA treasury (today's allocation with its on-chain receipt, market signals, honest track record, treasury stats, the certified Solana RWA registry, the protocol meter and autonomy score) and run its allocation model on your own inputs. Read-only, no auth, no keys.",
+  "type": "module",
+  "main": "index.js",
+  "module": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "index.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "solana",
+    "solana-agent-kit",
+    "ai-agents",
+    "agent",
+    "mcp",
+    "vaultbags",
+    "bags",
+    "rwa",
+    "defi",
+    "treasury"
+  ],
+  "license": "MIT",
+  "homepage": "https://vaultbags.app/agent",
+  "bugs": {
+    "url": "https://github.com/lshades/solana-agent-kit-vaultbags/issues"
+  },
+  "peerDependencies": {
+    "solana-agent-kit": "^2",
+    "zod": "^3.24.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lshades/solana-agent-kit-vaultbags.git"
+  }
+}
