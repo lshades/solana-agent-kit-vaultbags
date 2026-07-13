@@ -177,6 +177,20 @@ export function getRecentCycles(agent, input) {
   return callTool(agent, "recent-cycles", limit === undefined ? undefined : { limit });
 }
 
+export function getMonthlyReports(agent, input) {
+  const months = input?.months;
+  return callTool(agent, "monthly-reports", months === undefined ? undefined : { months });
+}
+
+export function getProofOfReserves(agent) {
+  return callTool(agent, "proof-of-reserves");
+}
+
+export function verifyClaim(agent, input) {
+  const tx = typeof input?.tx === "string" ? input.tx.trim() : "";
+  return callTool(agent, "verify-claim", { tx });
+}
+
 // Named map for the plugin's `methods` object and for tests.
 export const methods = {
   getTodaysAllocation,
@@ -197,4 +211,7 @@ export const methods = {
   getRwaPerformance,
   getShadowVsBrain,
   getRecentCycles,
+  getMonthlyReports,
+  getProofOfReserves,
+  verifyClaim,
 };

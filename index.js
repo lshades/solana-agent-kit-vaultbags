@@ -321,6 +321,51 @@ const recentCyclesAction = readAction({
   run: (agent, input) => methods.getRecentCycles(agent, input),
 });
 
+const monthlyReportsAction = readAction({
+  name: "VAULTBAGS_GET_MONTHLY_REPORTS",
+  similes: ["vaultbags monthly reports", "closed books", "monthly close on-chain", "vault monthly report"],
+  description:
+    "The agent's closed books: one report per calendar month with fees claimed, cycles run, real-world assets distributed, value claimed by holders, decisions frozen and stamped, and its own settled earnings. Each month is committed on-chain via a Memo carrying the sha256 of the stored payload, so the numbers cannot be edited after the fact. A closed book reports the past and promises nothing.",
+  schema: z.object({
+    months: z.number().int().min(1).max(24).optional().describe("How many recent months to return (default 12)."),
+  }),
+  example: {
+    input: { months: 3 },
+    output: { reports: [{ period: "2026-06-01", receiptTx: "..." }] },
+    explanation: "Read the last 3 monthly closed books with their on-chain receipts.",
+  },
+  run: (agent, input) => methods.getMonthlyReports(agent, input),
+});
+
+const proofOfReservesAction = readAction({
+  name: "VAULTBAGS_GET_PROOF_OF_RESERVES",
+  similes: ["vaultbags proof of reserves", "reserve wallets", "custody map", "on-chain reserves", "where are the reserves"],
+  description:
+    "Proof of Reserves: the named on-chain wallets that hold the vault's real-world assets, the certified issuer behind each asset (Backed/xStocks, Ondo, oro), live on-chain balances and USD values, plus the daily decision receipts and lifetime value paid to holders. Every wallet and balance is public and verifiable on Solscan. Read-only.",
+  schema: noInput,
+  example: {
+    output: { totalReservesUsd: 565.0, reserves: [{ symbol: "GOLD", valueUsd: 188.3 }] },
+    explanation: "Read the reserve wallets, issuers and live on-chain balances.",
+  },
+  run: (agent) => methods.getProofOfReserves(agent),
+});
+
+const verifyClaimAction = readAction({
+  name: "VAULTBAGS_VERIFY_CLAIM",
+  similes: ["verify vaultbags claim", "check a payout on-chain", "merkle proof for a claim", "was this claim honest"],
+  description:
+    "Verify one holder claim against the on-chain Merkle root. Given the claim's Solana transaction signature, returns the exact committed record (wallet, gold/S&P/treasury amounts, tx), its Merkle proof, the day's root, and the on-chain Memo that stamped that root. The guarantee is on-chain, not this response: recompute the leaf hash, fold the proof to a root, and check it against the memo. Proves the payout ledger is unaltered without trusting the operator.",
+  schema: z.object({
+    tx: z.string().min(43).max(90).describe("The claim's Solana transaction signature (base58)."),
+  }),
+  example: {
+    input: { tx: "<claim transaction signature>" },
+    output: { found: true, period: "2026-07-13", matchesOnChain: true },
+    explanation: "Verify a holder claim against the day's on-chain Merkle root.",
+  },
+  run: (agent, input) => methods.verifyClaim(agent, input),
+});
+
 // The plugin object: name, methods (callable with full type safety via
 // agent.methods.*), actions (LLM-callable), and a no-op initialize (the HTTP
 // client is stateless and needs nothing from the agent to start).
@@ -346,6 +391,9 @@ const VaultBagsPlugin = {
     rwaPerformanceAction,
     shadowVsBrainAction,
     recentCyclesAction,
+    monthlyReportsAction,
+    proofOfReservesAction,
+    verifyClaimAction,
   ],
   initialize() {},
 };

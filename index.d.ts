@@ -40,6 +40,9 @@ export interface VaultBagsMethods {
   getRwaPerformance: VaultBagsMethod;
   getShadowVsBrain: VaultBagsMethod;
   getRecentCycles: VaultBagsMethod<{ limit?: number }>;
+  getMonthlyReports: VaultBagsMethod<{ months?: number }>;
+  getProofOfReserves: VaultBagsMethod;
+  verifyClaim: VaultBagsMethod<{ tx: string }>;
 }
 
 /** The raw read-only methods, also exposed as the plugin's `methods`. */

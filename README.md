@@ -61,6 +61,9 @@ const today = await methods.getTodaysAllocation();
 | `VAULTBAGS_GET_RWA_PERFORMANCE` | `getRwaPerformance()` | The vault's real cost basis and return per RWA position since purchase, in USD and SOL terms. |
 | `VAULTBAGS_GET_SHADOW_VS_BRAIN` | `getShadowVsBrain()` | The shadow language model's daily calls measured against the deterministic brain. |
 | `VAULTBAGS_GET_RECENT_CYCLES` | `getRecentCycles({ limit? })` | The latest distribution cycles with their on-chain receipts. `limit` 1-20, default 5. |
+| `VAULTBAGS_GET_MONTHLY_REPORTS` | `getMonthlyReports({ months? })` | The agent's closed books, one per calendar month, each committed on-chain. `months` 1-24, default 12. |
+| `VAULTBAGS_GET_PROOF_OF_RESERVES` | `getProofOfReserves()` | Proof of Reserves: the reserve wallets, their certified issuers and live on-chain balances, plus decision receipts and value paid to holders. |
+| `VAULTBAGS_VERIFY_CLAIM` | `verifyClaim({ tx })` | Verify one holder claim against the on-chain Merkle root: the committed record, its proof, the day's root and the on-chain memo. Recompute it yourself; the guarantee is on-chain. |
 
 ## Configuration
 
