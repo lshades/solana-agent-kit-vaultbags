@@ -1,6 +1,6 @@
 {
   "name": "solana-agent-kit-vaultbags",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Solana Agent Kit v2 plugin for VaultBags: read the autonomous RWA treasury (today's allocation with its on-chain receipt, market signals, honest track record, treasury stats, the certified Solana RWA registry, the protocol meter and autonomy score) and run its allocation model on your own inputs. Read-only, no auth, no keys.",
   "type": "module",
   "main": "index.js",

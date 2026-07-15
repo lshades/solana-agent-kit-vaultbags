@@ -218,7 +218,7 @@ const listRwasAction = readAction({
   }),
   example: {
     input: { category: "equity" },
-    output: { count: 47, assets: [{ symbol: "AAPLx", category: "equity" }] },
+    output: { count: 47, assets: [{ symbol: "HOODx", category: "equity" }] },
     explanation: "List certified tokenized equities on Solana.",
   },
   run: (agent, input) => methods.listRwas(agent, input),
@@ -226,16 +226,16 @@ const listRwasAction = readAction({
 
 const getRwaAction = readAction({
   name: "VAULTBAGS_GET_RWA",
-  similes: ["resolve rwa mint", "is this mint the real tokenized stock", "look up tokenized nvidia", "verify rwa token"],
+  similes: ["resolve rwa mint", "is this mint the real tokenized stock", "look up tokenized robinhood", "is HOODx above the real stock", "verify rwa token"],
   description:
-    "Look up one tokenized real-world asset by its symbol (e.g. AAPLx, NVDAx, USDY, GOLD) or exact Solana mint, and get BOTH its certified identity (mint, decimals, underlying, issuer, how the address was verified) AND its live market read (on-chain price, 24h change, market cap, liquidity). Use it to resolve the real mint safely and to reason about an RWA's current behaviour.",
+    "Look up one tokenized real-world asset by its symbol (e.g. HOODx, NVDAx, AAPLx, USDY, GOLD) or exact Solana mint, and get its certified identity (mint, decimals, underlying, issuer, how the address was verified), its live market read (on-chain price, 24h change, market cap, liquidity), and for tokenized equities the underlying stock's oracle price plus the token's premium or discount to it (premiumPct, from an executable Jupiter quote when available). THE tool for 'how is tokenized Robinhood doing' and 'is HOODx trading above the real stock'. Use it to resolve the real mint safely and to reason about an RWA's current behaviour.",
   schema: z.object({
     query: z.string().min(1).max(64).describe("A token symbol (case-insensitive) or an exact Solana mint address."),
   }),
   example: {
-    input: { query: "NVDAx" },
-    output: { found: true, asset: { symbol: "NVDAx" }, market: { priceUsd: 190.2 } },
-    explanation: "Resolve tokenized NVIDIA's certified mint and live price.",
+    input: { query: "HOODx" },
+    output: { found: true, asset: { symbol: "HOODx" }, market: { priceUsd: 190.2 }, underlyingMarket: { priceUsd: 186.5 }, premiumPct: 1.98 },
+    explanation: "Resolve tokenized Robinhood's certified mint, its live price, and how far it trades above the real stock.",
   },
   run: (agent, input) => methods.getRwa(agent, input),
 });
