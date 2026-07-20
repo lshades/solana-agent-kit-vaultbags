@@ -31,6 +31,7 @@ export interface VaultBagsMethods {
   }>;
   getProjects: VaultBagsMethod;
   getProjectTreasury: VaultBagsMethod<{ mint: string }>;
+  getAgent: VaultBagsMethod<{ mint: string }>;
   getVaultDocs: VaultBagsMethod;
   listRwas: VaultBagsMethod<{ category?: "gold" | "treasury" | "equity-index" | "equity"; issuer?: "backed" | "ondo" | "oro" }>;
   getRwa: VaultBagsMethod<{ query: string }>;

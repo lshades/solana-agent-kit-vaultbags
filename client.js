@@ -136,6 +136,11 @@ export function getProjectTreasury(agent, input) {
   return callTool(agent, "project-treasury", { mint });
 }
 
+export function getAgent(agent, input) {
+  const mint = typeof input?.mint === "string" ? input.mint.trim() : "";
+  return callTool(agent, "evaluate", { mint });
+}
+
 export function getVaultDocs(agent) {
   return callTool(agent, "vault-docs");
 }
@@ -202,6 +207,7 @@ export const methods = {
   simulateAllocation,
   getProjects,
   getProjectTreasury,
+  getAgent,
   getVaultDocs,
   listRwas,
   getRwa,

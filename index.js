@@ -194,6 +194,22 @@ const projectTreasuryAction = readAction({
   run: (agent, input) => methods.getProjectTreasury(agent, input),
 });
 
+const getAgentAction = readAction({
+  name: "VAULTBAGS_GET_AGENT",
+  similes: ["evaluate a vaultbags agent", "autonomy score for a token", "is this launched agent legit", "agent passport by mint", "how autonomous is this token"],
+  description:
+    "Evaluate ANY token running on VaultBags as an autonomous agent, by SPL token mint: its Autonomy Score, its passport (identity, surfaces, on-chain receipts) and its treasury. The score splits into protocolScore (guarantees EVERY VaultBags agent inherits from minute one: a brain that decides daily, decisions stamped on-chain, the firewall) and projectScore (what THAT token earned on its own: distribution cycles that paid its holders, and the length of its own record). A freshly launched token reads high on the protocol side and 0 on its own, so never read the composite alone as a track record. Read-only public data.",
+  schema: z.object({
+    mint: z.string().min(32).max(44).describe("The agent's SPL token mint address (base58)."),
+  }),
+  example: {
+    input: { mint: "So11111111111111111111111111111111111111112" },
+    output: { found: true, passport: { reputation: { autonomyScore: 72, protocolScore: 100, projectScore: 40 } } },
+    explanation: "Evaluate one launched VaultBags agent, keeping inherited protocol guarantees separate from its own earned record.",
+  },
+  run: (agent, input) => methods.getAgent(agent, input),
+});
+
 const vaultDocsAction = readAction({
   name: "VAULTBAGS_GET_VAULT_DOCS",
   similes: ["vaultbags docs", "how does vaultbags work", "explain the vault"],
@@ -382,6 +398,7 @@ const VaultBagsPlugin = {
     simulateAllocationAction,
     projectsAction,
     projectTreasuryAction,
+    getAgentAction,
     vaultDocsAction,
     listRwasAction,
     getRwaAction,

@@ -52,6 +52,7 @@ const today = await methods.getTodaysAllocation();
 | `VAULTBAGS_SIMULATE_ALLOCATION` | `simulateAllocation({ ...signals })` | Runs the vault's model on your own market inputs and returns the weights it would choose. Deterministic, bounded, not advice. |
 | `VAULTBAGS_GET_PROJECTS` | `getProjects()` | Every treasury currently running on VaultBags. |
 | `VAULTBAGS_GET_PROJECT_TREASURY` | `getProjectTreasury({ mint })` | One integrated project's live treasury by SPL token mint. |
+| `VAULTBAGS_GET_AGENT` | `getAgent({ mint })` | Evaluate any launched token as an agent: Autonomy Score split into inherited protocol guarantees vs its own earned record, plus passport and treasury. |
 | `VAULTBAGS_GET_VAULT_DOCS` | `getVaultDocs()` | Condensed protocol documentation and live surface links. |
 | `VAULTBAGS_LIST_RWAS` | `listRwas({ category?, issuer? })` | The certified registry of openly transferable tokenized RWAs on Solana (gold, US Treasuries, US equities/ETFs), every mint verified against the issuer's own domain. |
 | `VAULTBAGS_GET_RWA` | `getRwa({ query })` | One certified RWA resolved by symbol or mint: verified identity plus a live market read. Protects agents from impersonator mints. |
