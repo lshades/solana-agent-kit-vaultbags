@@ -89,11 +89,19 @@ const treasuryStatsAction = readAction({
   name: "VAULTBAGS_GET_TREASURY_STATS",
   similes: ["vaultbags treasury stats", "vault total value", "how much has the vault paid holders"],
   description:
-    "Live treasury statistics: per-asset balances and USD values (gold, S&P 500, US treasuries), total vault value, total paid to holders, holder count, cycles processed and fees processed.",
+    "Live treasury statistics: per-asset balances and USD values (gold, S&P 500, US treasuries), total vault value, total paid to holders and fees processed. holdersCount and cyclesCount are $VAULT's own, while protocolHoldersTracked and protocolCyclesExecuted cover every project integrated with the protocol. Locking comes as two distinct numbers: activeLocks counts lock contracts, uniqueLockers counts the wallets holding them, and one wallet can hold several contracts, so they are never interchangeable.",
   schema: noInput,
   example: {
-    output: { totalValueUsd: 1234.56, holdersCount: 110, totalPaidToHoldersUsd: 420.69 },
-    explanation: "Read the live treasury size and totals paid to holders.",
+    output: {
+      totalValueUsd: 1234.56,
+      holdersCount: 110,
+      protocolHoldersTracked: 118,
+      activeLocks: 17,
+      uniqueLockers: 12,
+      totalPaidToHoldersUsd: 420.69,
+    },
+    explanation:
+      "Read the live treasury size, who holds, and how many wallets are locking (not how many lock contracts exist).",
   },
   run: (agent) => methods.getTreasuryStats(agent),
 });
