@@ -37,6 +37,7 @@ export interface VaultBagsMethods {
   getRwa: VaultBagsMethod<{ query: string }>;
   getProtocolMeter: VaultBagsMethod;
   getAutonomy: VaultBagsMethod;
+  getAutonomySpec: VaultBagsMethod;
   getAgentPassport: VaultBagsMethod;
   getRwaPerformance: VaultBagsMethod;
   getShadowVsBrain: VaultBagsMethod;

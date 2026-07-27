@@ -165,6 +165,10 @@ export function getAutonomy(agent) {
   return callTool(agent, "autonomy");
 }
 
+export function getAutonomySpec(agent) {
+  return callTool(agent, "autonomy-spec");
+}
+
 export function getAgentPassport(agent) {
   return callTool(agent, "passport");
 }
@@ -220,6 +224,7 @@ export const methods = {
   getRwa,
   getProtocolMeter,
   getAutonomy,
+  getAutonomySpec,
   getAgentPassport,
   getRwaPerformance,
   getShadowVsBrain,

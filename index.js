@@ -290,6 +290,19 @@ const autonomyAction = readAction({
   run: (agent) => methods.getAutonomy(agent),
 });
 
+const autonomySpecAction = readAction({
+  name: "VAULTBAGS_GET_AUTONOMY_SPEC",
+  similes: ["vaultbags autonomy rules", "how is the autonomy score calculated", "recompute the autonomy score"],
+  description:
+    "The rules behind the Autonomy Score, published so the number can be checked instead of believed: every dimension, its weight, the formula, where its data comes from and whether it is independently verifiable. It also names what the score does NOT claim, and marks the one dimension that is self-asserted rather than provable.",
+  schema: noInput,
+  example: {
+    output: { specVersion: 1, dimensions: [{ key: "receipts", weight: 0.2 }] },
+    explanation: "Fetch the scoring rules to recompute the score yourself.",
+  },
+  run: (agent) => methods.getAutonomySpec(agent),
+});
+
 const agentPassportAction = readAction({
   name: "VAULTBAGS_GET_AGENT_PASSPORT",
   similes: ["vaultbags passport", "agent identity", "evaluate the vault agent"],
@@ -437,6 +450,7 @@ const VaultBagsPlugin = {
     getRwaAction,
     protocolMeterAction,
     autonomyAction,
+    autonomySpecAction,
     agentPassportAction,
     rwaPerformanceAction,
     shadowVsBrainAction,
