@@ -1,0 +1,77 @@
+# Publish to npm with provenance, using trusted publishing (OIDC).
+#
+# No npm token is stored anywhere. Trusted publishing exchanges this workflow's
+# OIDC identity for short-lived credentials and attaches a provenance
+# attestation, so the published package carries a publicly verifiable link back
+# to the exact commit it was built from.
+#
+# That matters here because this package is installed INSIDE other people's
+# agents. Until now every release was published by hand, which means the only
+# thing standing between a stolen credential and a malicious version was a
+# credential. This removes the credential.
+#
+# One-time setup on npmjs.com: Package settings -> Trusted publisher ->
+# GitHub Actions, with this repository and this workflow filename.
+#
+# Release: push a tag like v0.2.5 matching the version in package.json.
+
+name: publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  # Required for trusted publishing: it is what proves to npm which workflow,
+  # in which repository, at which commit is asking to publish.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Provenance requires a recent npm; the runner's bundled version is not
+      # guaranteed to be new enough.
+      - run: npm install -g npm@latest
+
+      # There is no dependency install step on purpose: this package declares
+      # only peer dependencies, so nothing is fetched that could substitute code
+      # between the tag and the publish.
+
+      # No test suite here, so the checks that DO exist are run instead of
+      # publishing blind: the shipped modules must parse, and every file the
+      # manifest promises must actually be there. A package that ships a broken
+      # import or a missing entry point is worse than a late release.
+      - name: Shipped files must parse
+        run: node --check index.js && node --check client.js
+
+      - name: Every file the manifest promises must exist
+        run: |
+          node -e "
+            const fs = require('fs');
+            const missing = require('./package.json').files.filter((f) => !fs.existsSync(f));
+            if (missing.length) { console.error('missing: ' + missing.join(', ')); process.exit(1); }
+            console.log('all declared files present');
+          "
+
+      # The tag and the manifest must agree, or a release can quietly publish a
+      # version nobody tagged.
+      - name: Tag must match package version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "tag $TAG does not match package.json $PKG"
+            exit 1
+          fi
+
+      - run: npm publish
