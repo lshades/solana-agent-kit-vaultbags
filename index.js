@@ -390,6 +390,31 @@ const verifyClaimAction = readAction({
   run: (agent, input) => methods.verifyClaim(agent, input),
 });
 
+const verifyDecisionAction = readAction({
+  name: "VAULTBAGS_VERIFY_DECISION",
+  similes: [
+    "verify vaultbags decision",
+    "check what the vault decided to buy",
+    "was the allocation stamped on-chain",
+    "prove the agent's daily call",
+  ],
+  description:
+    "Verify one daily allocation decision against the hash stamped on-chain that day. Returns the exact payload the receipt commits to (the date, the three RWA weights, and the market signals the model read), the hash recomputed live from the stored record, the hash written at stamping time, the anchoring transaction, and the wallet that must have signed it. The guarantee is on-chain, not this response: serialize the committed payload canonically, sha256 it, and check it against the memo read from Solana. Proves the decision published is the decision stamped, before the vault acted on it.",
+  schema: z.object({
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional()
+      .describe("UTC date as YYYY-MM-DD. Omit for today."),
+  }),
+  example: {
+    input: { date: "2026-07-27" },
+    output: { found: true, date: "2026-07-27", stamped: true, selfConsistent: true },
+    explanation: "Verify what the vault committed to buying that day against its on-chain receipt.",
+  },
+  run: (agent, input) => methods.verifyDecision(agent, input),
+});
+
 // The plugin object: name, methods (callable with full type safety via
 // agent.methods.*), actions (LLM-callable), and a no-op initialize (the HTTP
 // client is stateless and needs nothing from the agent to start).
@@ -419,6 +444,7 @@ const VaultBagsPlugin = {
     monthlyReportsAction,
     proofOfReservesAction,
     verifyClaimAction,
+    verifyDecisionAction,
   ],
   initialize() {},
 };

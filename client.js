@@ -196,6 +196,13 @@ export function verifyClaim(agent, input) {
   return callTool(agent, "verify-claim", { tx });
 }
 
+// Omitting the date asks for today's decision, which is what the endpoint
+// defaults to, so an empty value is left off rather than sent as "".
+export function verifyDecision(agent, input) {
+  const date = typeof input?.date === "string" ? input.date.trim() : "";
+  return callTool(agent, "verify-decision", date ? { date } : undefined);
+}
+
 // Named map for the plugin's `methods` object and for tests.
 export const methods = {
   getTodaysAllocation,
@@ -220,4 +227,5 @@ export const methods = {
   getMonthlyReports,
   getProofOfReserves,
   verifyClaim,
+  verifyDecision,
 };

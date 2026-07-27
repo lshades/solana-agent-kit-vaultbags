@@ -44,6 +44,7 @@ export interface VaultBagsMethods {
   getMonthlyReports: VaultBagsMethod<{ months?: number }>;
   getProofOfReserves: VaultBagsMethod;
   verifyClaim: VaultBagsMethod<{ tx: string }>;
+  verifyDecision: VaultBagsMethod<{ date?: string }>;
 }
 
 /** The raw read-only methods, also exposed as the plugin's `methods`. */

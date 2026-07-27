@@ -65,6 +65,7 @@ const today = await methods.getTodaysAllocation();
 | `VAULTBAGS_GET_MONTHLY_REPORTS` | `getMonthlyReports({ months? })` | The agent's closed books, one per calendar month, each committed on-chain. `months` 1-24, default 12. |
 | `VAULTBAGS_GET_PROOF_OF_RESERVES` | `getProofOfReserves()` | Proof of Reserves: the reserve wallets, their certified issuers and live on-chain balances, plus decision receipts and value paid to holders. |
 | `VAULTBAGS_VERIFY_CLAIM` | `verifyClaim({ tx })` | Verify one holder claim against the on-chain Merkle root: the committed record, its proof, the day's root and the on-chain memo. Recompute it yourself; the guarantee is on-chain. |
+| `VAULTBAGS_VERIFY_DECISION` | `verifyDecision({ date? })` | Verify one daily allocation decision against the hash stamped on-chain that day: the payload the receipt commits to, both hashes, the anchoring transaction and the wallet that must have signed it. Omit `date` for today. |
 
 ## Configuration
 
