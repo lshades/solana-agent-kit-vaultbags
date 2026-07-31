@@ -202,6 +202,14 @@ export function verifyClaim(agent, input) {
 
 // Omitting the date asks for today's decision, which is what the endpoint
 // defaults to, so an empty value is left off rather than sent as "".
+export function simulateLockBoost(agent, { amount } = {}) {
+  return callTool(agent, amount != null ? `lock-boost?amount=${encodeURIComponent(amount)}` : "lock-boost");
+}
+
+export function verifyDay(agent, { period } = {}) {
+  return callTool(agent, period ? `verify-day?period=${encodeURIComponent(period)}` : "verify-day");
+}
+
 export function verifyDecision(agent, input) {
   const date = typeof input?.date === "string" ? input.date.trim() : "";
   return callTool(agent, "verify-decision", date ? { date } : undefined);
@@ -232,5 +240,7 @@ export const methods = {
   getMonthlyReports,
   getProofOfReserves,
   verifyClaim,
+  simulateLockBoost,
+  verifyDay,
   verifyDecision,
 };

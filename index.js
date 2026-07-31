@@ -403,6 +403,36 @@ const verifyClaimAction = readAction({
   run: (agent, input) => methods.verifyClaim(agent, input),
 });
 
+const simulateLockBoostAction = readAction({
+  name: "VAULTBAGS_SIMULATE_LOCK_BOOST",
+  similes: ["vaultbags lock boost calculator", "what boost would I get for locking", "lock boost multiplier"],
+  description:
+    "Estimate the $VAULT lock boost with live data: the percentage of circulating supply locked right now, the shared boost multiplier that fraction produces (the payout cron's own formula, capped at 1.5x), and what both become after locking N more tokens. The multiplier is global: locking more applies the boost to more tokens rather than raising the number, and the response says so.",
+  schema: z.object({
+    amount: z.number().int().nonnegative().optional().describe("Whole $VAULT tokens you are considering locking; omit for the current state"),
+  }),
+  example: {
+    output: { ok: true, current: { pctOfCirculatingLocked: 38.6, boostMultiplier: 1.5 } },
+    explanation: "Read the current lock boost state and simulate adding a lock.",
+  },
+  run: (agent, input) => methods.simulateLockBoost(agent, input || {}),
+});
+
+const verifyDayAction = readAction({
+  name: "VAULTBAGS_VERIFY_DAY",
+  similes: ["audit the vaultbags claim ledger", "verify a day of claims", "is the payout ledger intact"],
+  description:
+    "Verify a whole day of the VaultBags claim ledger against its Merkle root stamped on Solana: every committed claim, the recomputed root, the stamped root, whether they match, and the treasury signer to check. Omit the period to audit the most recent stamped day, which makes this suitable for continuous monitoring.",
+  schema: z.object({
+    period: z.string().optional().describe("UTC day as YYYY-MM-DD; omit for the latest stamped day"),
+  }),
+  example: {
+    output: { found: true, matchesOnChain: true, claimCount: 3 },
+    explanation: "Audit the latest stamped day of the claim ledger.",
+  },
+  run: (agent, input) => methods.verifyDay(agent, input || {}),
+});
+
 const verifyDecisionAction = readAction({
   name: "VAULTBAGS_VERIFY_DECISION",
   similes: [
@@ -458,6 +488,8 @@ const VaultBagsPlugin = {
     monthlyReportsAction,
     proofOfReservesAction,
     verifyClaimAction,
+    simulateLockBoostAction,
+    verifyDayAction,
     verifyDecisionAction,
   ],
   initialize() {},

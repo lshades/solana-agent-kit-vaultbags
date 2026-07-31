@@ -45,6 +45,8 @@ export interface VaultBagsMethods {
   getMonthlyReports: VaultBagsMethod<{ months?: number }>;
   getProofOfReserves: VaultBagsMethod;
   verifyClaim: VaultBagsMethod<{ tx: string }>;
+  simulateLockBoost: VaultBagsMethod<{ amount?: number }>;
+  verifyDay: VaultBagsMethod<{ period?: string }>;
   verifyDecision: VaultBagsMethod<{ date?: string }>;
 }
 
