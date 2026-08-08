@@ -56,14 +56,44 @@ function queryString(params) {
   return s ? `?${s}` : "";
 }
 
+// How long to wait for an answer before giving up.
+//
+// fetch has no timeout of its own, anywhere. A request that is accepted and
+// then never answered leaves its promise unsettled for ever, and an agent
+// awaiting one of these calls simply stops: no error to report, no branch to
+// take, nothing to retry. A bounded failure is something a caller can handle;
+// an unbounded wait is not.
+//
+// Fifteen seconds is long enough for a slow answer on a congested route and
+// short enough that a dead one becomes a real error while the caller is still
+// there. Overridable for callers on unusual links.
+export const DEFAULT_TIMEOUT_MS = 15_000;
+
+export function resolveTimeoutMs(agentOrUrl) {
+  const raw = agentOrUrl && typeof agentOrUrl === "object"
+    ? agentOrUrl?.config?.OTHER_API_KEYS?.VAULTBAGS_TIMEOUT_MS
+    : undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_TIMEOUT_MS;
+}
+
 async function callTool(agent, restPath, params) {
   const base = resolveBaseUrl(agent);
   const url = `${base}/api/agent/${restPath}${queryString(params)}`;
+  const timeoutMs = resolveTimeoutMs(agent);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   let res;
   try {
-    res = await fetch(url, { headers: { accept: "application/json" } });
+    res = await fetch(url, { headers: { accept: "application/json" }, signal: controller.signal });
   } catch (err) {
+    // "AbortError" tells a caller nothing it can act on. Say what happened.
+    if (err?.name === "AbortError") {
+      throw new Error(`VaultBags ${restPath}: no answer within ${timeoutMs}ms`);
+    }
     throw new Error(`VaultBags ${restPath}: network error (${err?.message || err})`);
+  } finally {
+    clearTimeout(timer);
   }
   const text = await res.text();
   let json;

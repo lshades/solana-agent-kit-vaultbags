@@ -47,5 +47,8 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lshades/solana-agent-kit-vaultbags.git"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
   }
 }
