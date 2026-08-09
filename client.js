@@ -221,6 +221,32 @@ export function getMonthlyReports(agent, input) {
   return callTool(agent, "monthly-reports", months === undefined ? undefined : { months });
 }
 
+export function getPayoutIntegrity(agent) {
+  return callTool(agent, "payout-integrity");
+}
+
+export function getLockTier(agent, input) {
+  const args = {};
+  if (input?.days !== undefined) args.days = input.days;
+  if (input?.wallet !== undefined) args.wallet = input.wallet;
+  return callTool(agent, "lock-tier", Object.keys(args).length ? args : undefined);
+}
+
+export function getTreasuryHistory(agent, input) {
+  const args = {};
+  if (input?.days !== undefined) args.days = input.days;
+  if (input?.points !== undefined) args.points = input.points;
+  return callTool(agent, "treasury-history", Object.keys(args).length ? args : undefined);
+}
+
+export function getHolderDistribution(agent) {
+  return callTool(agent, "holder-distribution");
+}
+
+export function getRecentActivity(agent) {
+  return callTool(agent, "recent-activity");
+}
+
 export function getProofOfReserves(agent) {
   return callTool(agent, "proof-of-reserves");
 }
@@ -269,6 +295,11 @@ export const methods = {
   getRecentCycles,
   getMonthlyReports,
   getProofOfReserves,
+  getPayoutIntegrity,
+  getLockTier,
+  getTreasuryHistory,
+  getHolderDistribution,
+  getRecentActivity,
   verifyClaim,
   simulateLockBoost,
   verifyDay,

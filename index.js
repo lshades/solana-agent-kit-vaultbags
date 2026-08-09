@@ -374,6 +374,79 @@ const monthlyReportsAction = readAction({
   run: (agent, input) => methods.getMonthlyReports(agent, input),
 });
 
+const payoutIntegrityAction = readAction({
+  name: "VAULTBAGS_GET_PAYOUT_INTEGRITY",
+  similes: ["vaultbags payout integrity", "did every payout land", "have any claims failed", "payout audit"],
+  description:
+    "Every holder payout the protocol has ever recorded, looked up on Solana and counted: confirmed by the chain, rejected by it, or no longer carried in the answering node's history. Recomputed on read rather than stored, so it cannot go stale. `allLanded` is true only when every recorded payout was found AND accepted, because 'not found' is a fact about the node and never counts as success. If the ledger or the chain cannot be read in full, no partial figure is served at all. Use it to check that the claim ledger matches the chain rather than trusting it. Read-only.",
+  schema: noInput,
+  example: {
+    output: { total: 335, succeeded: 335, reverted: 0, allLanded: true },
+    explanation: "Confirm every payout on record was accepted by the chain.",
+  },
+  run: (agent) => methods.getPayoutIntegrity(agent),
+});
+
+const lockTierAction = readAction({
+  name: "VAULTBAGS_GET_LOCK_TIER",
+  similes: ["vaultbags lock tier", "what tier is my lock", "tier for locking 90 days", "lock tiers"],
+  description:
+    "The visible tier of a lock. With `days`, the tier a term of that length reaches and how far the next one is. With `wallet`, the tier that wallet currently holds, read from public lock records. Both optional and independent; with neither, the tier table. The tier comes from the TERM a lock was signed for, measured from its on-chain creation to its unlock. It grants NOTHING: it is never stored and the boost multiplier does not read it. Size is not an input, so the same term reaches the same tier at any balance. Read-only.",
+  schema: z.object({
+    days: z.number().int().min(1).max(3650).optional().describe("A lock term in days, to ask which tier it would reach."),
+    wallet: z.string().optional().describe("A Solana wallet address, to ask which tier it currently holds."),
+  }),
+  example: {
+    input: { days: 180 },
+    output: { forTerm: { days: 180, tier: "Half Year", next: { label: "Year", daysMore: 182 } } },
+    explanation: "Ask which tier a six-month lock reaches, and what the next one costs.",
+  },
+  run: (agent, input) => methods.getLockTier(agent, input),
+});
+
+const treasuryHistoryAction = readAction({
+  name: "VAULTBAGS_GET_TREASURY_HISTORY",
+  similes: ["vaultbags treasury history", "vault value over time", "is the vault growing", "treasury chart data"],
+  description:
+    "The treasury's value over time: per-sample total USD and the balance and USD value of gold, the S&P 500 and US treasuries. Samples are spread evenly across the WHOLE requested window rather than taken from its most recent end, so a 90-day request describes 90 days rather than the newest slice of them. THE tool for reasoning about trend instead of a single moment. Descriptive history of what was held and what it was worth; never a projection. Read-only.",
+  schema: z.object({
+    days: z.number().int().min(1).max(365).optional().describe("Window length in days (default 30, max 365)."),
+    points: z.number().int().min(2).max(200).optional().describe("How many samples across that window (default 60, max 200)."),
+  }),
+  example: {
+    input: { days: 90, points: 30 },
+    output: { windowDays: 90, samples: [{ at: "2026-06-01T00:00:00Z", totalUsd: 812.4 }] },
+    explanation: "Read 30 evenly spaced samples spanning the last 90 days.",
+  },
+  run: (agent, input) => methods.getTreasuryHistory(agent, input),
+});
+
+const holderDistributionAction = readAction({
+  name: "VAULTBAGS_GET_HOLDER_DISTRIBUTION",
+  similes: ["vaultbags holders", "how concentrated is the supply", "holder count", "whale concentration"],
+  description:
+    "Who holds the token, in aggregate: the number of distinct holding WALLETS (not token accounts, with the protocol's own wallets and the pools excluded), how that changed over the last day and week, how many wallets are locking and how many locks they hold, and how concentrated supply is across the largest wallets. No addresses and no per-wallet amounts. Concentration is null rather than approximated when the underlying scan could not be completed in full. Everything here is derivable from the chain by anyone. Read-only.",
+  schema: noInput,
+  example: {
+    output: { holders: 257, concentration: { top10PctOfSupply: 39.96 } },
+    explanation: "Check how many wallets hold and how concentrated the supply is.",
+  },
+  run: (agent) => methods.getHolderDistribution(agent),
+});
+
+const recentActivityAction = readAction({
+  name: "VAULTBAGS_GET_RECENT_ACTIVITY",
+  similes: ["vaultbags recent trades", "is anyone trading", "buys and sells", "trading activity"],
+  description:
+    "Recent trading in aggregate over the last 24 hours and 7 days: trades, buys, sells, distinct buyers, distinct sellers and distinct traders (a wallet that both bought and sold counts once, so traders is not buyers plus sellers). Counts of wallets, never the wallets themselves. `truncated` true on a window means it could not be read in full, so its counts are a floor rather than a total. Every trade feeds the vault, so this is the activity the treasury is funded by. Read-only.",
+  schema: noInput,
+  example: {
+    output: { last24h: { trades: 300, buys: 159, sells: 141, traders: 122 } },
+    explanation: "Check whether the token is actually being traded right now.",
+  },
+  run: (agent) => methods.getRecentActivity(agent),
+});
+
 const proofOfReservesAction = readAction({
   name: "VAULTBAGS_GET_PROOF_OF_RESERVES",
   similes: ["vaultbags proof of reserves", "reserve wallets", "custody map", "on-chain reserves", "where are the reserves"],
@@ -465,6 +538,11 @@ const VaultBagsPlugin = {
   name: "vaultbags",
   methods: { ...methods },
   actions: [
+    payoutIntegrityAction,
+    lockTierAction,
+    treasuryHistoryAction,
+    holderDistributionAction,
+    recentActivityAction,
     todaysAllocationAction,
     dailyBriefingAction,
     treasuryStatsAction,
