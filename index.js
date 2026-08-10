@@ -531,6 +531,61 @@ const verifyDecisionAction = readAction({
   run: (agent, input) => methods.verifyDecision(agent, input),
 });
 
+const liquidityAction = readAction({
+  name: "VAULTBAGS_GET_LIQUIDITY",
+  similes: [
+    "vaultbags liquidity",
+    "is the liquidity locked",
+    "can they rug this",
+    "how much liquidity has the protocol added",
+    "vaultbags lp position",
+  ],
+  description:
+    "The liquidity this protocol has built into its own pool, and whether any of it can be taken back out. THE tool for 'can they pull the liquidity': `lock.allLocked` is read live from the pool position rather than from a record, and is true only when the position reports zero unlocked liquidity, meaning nobody can withdraw any of it including the protocol itself. Returns two money figures that are not interchangeable: `builtIntoLiquidity` is a cost basis, each deposit priced at the moment it happened, which does not move with the market; `positionNow` is what that same liquidity represents at current prices, which does, and in a pool the two sides drift apart from what went in. `feesCompounded` is what the locked position earned from trades and had put straight back in. Rebuilt from one public wallet's history on every read, so all of it can be recomputed from Solana. Read-only.",
+  schema: noInput,
+  example: {
+    output: { lock: { allLocked: true }, builtIntoLiquidity: { totalUsdAtTimeOfEachDeposit: 349.92 } },
+    explanation: "Check whether the protocol's own liquidity can be withdrawn by anyone.",
+  },
+  run: (agent) => methods.getLiquidity(agent),
+});
+
+const supplyAction = readAction({
+  name: "VAULTBAGS_GET_SUPPLY",
+  similes: [
+    "vaultbags supply",
+    "circulating supply of vault",
+    "what is the total supply",
+    "supply for market cap",
+  ],
+  description:
+    "The token's supply, both of the numbers that legitimately carry that name, because using the wrong one silently produces a wrong percentage. `marketSupply` is the total minted: what market caps are computed against and what the rest of the ecosystem reports, since tokens sitting in a pool are still tradeable by anyone. `distributedSupply` subtracts the balances held by the pool authorities and is what the protocol's own accounting uses for holder shares, the leaderboard and the lock boost, because tokens inside a pool belong to no wallet that can claim a payout. Use the first for market cap and the second for any question about the fraction of supply holders control. There is no team, investor or private-sale allocation. Read-only.",
+  schema: noInput,
+  example: {
+    output: { marketSupply: 999976143.93, distributedSupply: 912634901.65 },
+    explanation: "Get the right supply figure for a market cap or a holder percentage.",
+  },
+  run: (agent) => methods.getSupply(agent),
+});
+
+const raffleAction = readAction({
+  name: "VAULTBAGS_GET_RAFFLE",
+  similes: [
+    "vaultbags raffle",
+    "is there a raffle running",
+    "how many tickets in the raffle",
+    "vaultbags giveaway",
+  ],
+  description:
+    "The public state of the holder raffle: whether a draw is open, the window it covers, the weighted ticket total, how many wallets are in it, what is being given away, and the claim grace period. Tickets are weighted by how long a holder actually held across the window rather than by a balance at one instant, so buying just before the close buys no tickets, and locked tokens count. The draw's randomness comes from a public beacon whose round is fixed by the window's end date, chosen before the entrant list can be known, so nobody selects or times the number. Aggregate only: entrants are never enumerated. Read-only.",
+  schema: noInput,
+  example: {
+    output: { status: "standby", totalTickets: 9926.77, participants: 311 },
+    explanation: "Report the current raffle window and how many holders are in it.",
+  },
+  run: (agent) => methods.getRaffle(agent),
+});
+
 // The plugin object: name, methods (callable with full type safety via
 // agent.methods.*), actions (LLM-callable), and a no-op initialize (the HTTP
 // client is stateless and needs nothing from the agent to start).
@@ -569,6 +624,9 @@ const VaultBagsPlugin = {
     simulateLockBoostAction,
     verifyDayAction,
     verifyDecisionAction,
+    liquidityAction,
+    supplyAction,
+    raffleAction,
   ],
   initialize() {},
 };

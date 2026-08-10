@@ -71,6 +71,9 @@ const today = await methods.getTodaysAllocation();
 | `VAULTBAGS_GET_PROOF_OF_RESERVES` | `getProofOfReserves()` | Proof of Reserves: the reserve wallets, their certified issuers and live on-chain balances, plus decision receipts and value paid to holders. |
 | `VAULTBAGS_VERIFY_CLAIM` | `verifyClaim({ tx })` | Verify one holder claim against the on-chain Merkle root: the committed record, its proof, the day's root and the on-chain memo. Recompute it yourself; the guarantee is on-chain. |
 | `VAULTBAGS_VERIFY_DECISION` | `verifyDecision({ date? })` | Verify one daily allocation decision against the hash stamped on-chain that day: the payload the receipt commits to, both hashes, the anchoring transaction and the wallet that must have signed it. Omit `date` for today. |
+| `VAULTBAGS_GET_LIQUIDITY` | `getLiquidity()` | The liquidity the protocol built into its own pool and whether any of it can be withdrawn. `lock.allLocked` is read live from the position, true only when it reports zero unlocked liquidity. `builtIntoLiquidity` is a cost basis at each deposit's own moment; `positionNow` is what it represents today. `feesCompounded` is what the locked position earned and had put back in. |
+| `VAULTBAGS_GET_SUPPLY` | `getSupply()` | Both figures called "supply": `marketSupply` (total minted, what market caps use) and `distributedSupply` (pool balances excluded, what holder shares and the lock boost use). Using the wrong one silently produces a wrong percentage. |
+| `VAULTBAGS_GET_RAFFLE` | `getRaffle()` | The holder raffle's public state: window, weighted tickets, participants, prizes and claim grace. Tickets weight how long a holder held, not a balance at one instant. Randomness comes from a public beacon whose round is fixed before entrants are known. Aggregate only. |
 
 ## Configuration
 

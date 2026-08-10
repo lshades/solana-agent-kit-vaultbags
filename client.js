@@ -123,7 +123,7 @@ function pickSignals(input) {
   return out;
 }
 
-// ---- The ten read-only capabilities -----------------------------------------
+// ---- The read-only capabilities ---------------------------------------------
 // Signature is (agent, input) to match Solana Agent Kit's method convention;
 // `agent` is only read for an optional base-URL override, so both are optional
 // and the functions work standalone too.
@@ -271,6 +271,18 @@ export function verifyDecision(agent, input) {
   return callTool(agent, "verify-decision", date ? { date } : undefined);
 }
 
+export function getLiquidity(agent) {
+  return callTool(agent, "liquidity");
+}
+
+export function getSupply(agent) {
+  return callTool(agent, "supply");
+}
+
+export function getRaffle(agent) {
+  return callTool(agent, "raffle");
+}
+
 // Named map for the plugin's `methods` object and for tests.
 export const methods = {
   getTodaysAllocation,
@@ -304,4 +316,7 @@ export const methods = {
   simulateLockBoost,
   verifyDay,
   verifyDecision,
+  getLiquidity,
+  getSupply,
+  getRaffle,
 };
