@@ -283,6 +283,15 @@ export function getRaffle(agent) {
   return callTool(agent, "raffle");
 }
 
+export function getStrategies(agent) {
+  return callTool(agent, "strategies");
+}
+
+export function getStrategy(agent, input) {
+  const strategy = typeof input?.strategy === "string" ? input.strategy.trim() : "";
+  return callTool(agent, "strategy", { strategy });
+}
+
 // Named map for the plugin's `methods` object and for tests.
 export const methods = {
   getTodaysAllocation,
@@ -319,4 +328,6 @@ export const methods = {
   getLiquidity,
   getSupply,
   getRaffle,
+  getStrategies,
+  getStrategy,
 };

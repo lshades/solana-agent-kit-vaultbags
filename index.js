@@ -586,6 +586,47 @@ const raffleAction = readAction({
   run: (agent) => methods.getRaffle(agent),
 });
 
+const strategiesAction = readAction({
+  name: "VAULTBAGS_GET_STRATEGIES",
+  similes: [
+    "vaultbags strategies",
+    "vault strategy presets",
+    "what mixes can a vault buy",
+    "strategy track records",
+  ],
+  description:
+    "Every vault strategy: the four presets (Classic, Growth, Hard Money, Income) plus each distinct strategy a live project has frozen. A strategy is a signed selection of 2-4 certified real-world assets, each at least 15%, identified by the hash of that selection. Presets run as live paper strategies: their daily decisions are frozen and stamped on-chain before any project adopts them, so the track record is verifiable rather than narrated. Each entry carries the asset list with base weights, which tokens adopted it, and today's frozen decision when one exists. Read-only, aggregate only.",
+  schema: noInput,
+  example: {
+    output: { strategies: [{ presetId: "classic", label: "Classic", adoptedByTokens: [], todaysDecision: null }] },
+    explanation: "List every vault strategy and its receipted daily decision.",
+  },
+  run: (agent) => methods.getStrategies(agent),
+});
+
+const strategyAction = readAction({
+  name: "VAULTBAGS_GET_STRATEGY",
+  similes: [
+    "vaultbags strategy detail",
+    "show the growth strategy",
+    "strategy decision history",
+    "what does this strategy hold",
+  ],
+  description:
+    "One vault strategy in depth: its signed asset selection (mint, symbol, category, base weight), which tokens adopted it, and its recent daily decisions with the per-day weights, convictions and on-chain memo receipts. Identify it by preset id (classic, growth, hard-money, income) or by its 64-hex strategy key. Read-only.",
+  schema: z.object({
+    strategy: z
+      .string()
+      .describe("A preset id (classic, growth, hard-money, income) or a 64-hex strategy key."),
+  }),
+  example: {
+    input: { strategy: "classic" },
+    output: { found: true, presetId: "classic", decisions: [] },
+    explanation: "Read the Classic strategy's mix and its receipted decision history.",
+  },
+  run: (agent, input) => methods.getStrategy(agent, input),
+});
+
 // The plugin object: name, methods (callable with full type safety via
 // agent.methods.*), actions (LLM-callable), and a no-op initialize (the HTTP
 // client is stateless and needs nothing from the agent to start).
@@ -627,6 +668,8 @@ const VaultBagsPlugin = {
     liquidityAction,
     supplyAction,
     raffleAction,
+    strategiesAction,
+    strategyAction,
   ],
   initialize() {},
 };
