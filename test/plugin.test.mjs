@@ -59,6 +59,30 @@ test("every action defined is also registered in the actions array", () => {
   );
 });
 
+test("every action is documented in the README", () => {
+  // The README table is how a consumer decides whether this package does what
+  // they need, so an action missing from it is an action nobody knows exists.
+  // Five were missing when this test was written, which is why it exists.
+  const readme = readFileSync(join(root, "README.md"), "utf8");
+  const names = [...index.matchAll(/name: "(VAULTBAGS_[A-Z_]+)"/g)].map((m) => m[1]);
+  for (const name of names) {
+    assert.ok(readme.includes("`" + name + "`"), `${name} ships but the README never mentions it`);
+  }
+});
+
+test("the package ships every file it imports", () => {
+  // index.js and client.js are useless without the modules they import, and a
+  // missing entry in `files` is invisible until the published tarball is
+  // installed by somebody else.
+  const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  const client = readFileSync(join(root, "client.js"), "utf8");
+  const local = [...(index + "\n" + client).matchAll(/from "\.\/([\w.-]+)"/g)].map((m) => m[1]);
+  assert.ok(local.length > 0, "no local imports found; the file shape changed");
+  for (const file of new Set(local)) {
+    assert.ok(pkg.files.includes(file), `${file} is imported but missing from package.json "files"`);
+  }
+});
+
 test("no two actions share a name", () => {
   const names = [...index.matchAll(/name: "(VAULTBAGS_[A-Z_]+)"/g)].map((m) => m[1]);
   const seen = new Set();

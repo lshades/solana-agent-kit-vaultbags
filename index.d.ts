@@ -48,6 +48,14 @@ export interface VaultBagsMethods {
   simulateLockBoost: VaultBagsMethod<{ amount?: number }>;
   verifyDay: VaultBagsMethod<{ period?: string }>;
   verifyDecision: VaultBagsMethod<{ date?: string }>;
+  /**
+   * Verify a receipt from the `X-X402-Receipt` header of a paid call: the
+   * signature against the issuer's published key, the claims against their own
+   * rules, and the destination against the lane's live terms. `paymentProvenHere`
+   * is always false: a signature proves who issued the receipt, the transaction
+   * on Solana proves the payment.
+   */
+  verifyReceipt: VaultBagsMethod<{ receipt: string }>;
 }
 
 /** The raw read-only methods, also exposed as the plugin's `methods`. */

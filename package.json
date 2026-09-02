@@ -1,7 +1,7 @@
 {
   "name": "solana-agent-kit-vaultbags",
-  "version": "0.4.1",
-  "description": "Solana Agent Kit v2 plugin for VaultBags: read the autonomous RWA treasury (today's allocation with its on-chain receipt, market signals, honest track record, treasury stats, the certified Solana RWA registry, the protocol meter and autonomy score) and run its allocation model on your own inputs. Read-only, no auth, no keys.",
+  "version": "0.5.1",
+  "description": "Solana Agent Kit v2 plugin for VaultBags: read the autonomous RWA treasury (today's allocation with its on-chain receipt, market signals, honest track record, treasury stats, the certified Solana RWA registry, the protocol meter and autonomy score) run its allocation model on your own inputs, and verify a paid call's signed receipt. Read-only, no auth, no keys.",
   "type": "module",
   "main": "index.js",
   "module": "index.js",
@@ -15,6 +15,7 @@
   "files": [
     "index.js",
     "client.js",
+    "receipt.js",
     "index.d.ts",
     "README.md",
     "LICENSE"
@@ -33,7 +34,8 @@
     "bags",
     "rwa",
     "defi",
-    "treasury"
+    "treasury",
+    "x402"
   ],
   "license": "MIT",
   "homepage": "https://vaultbags.app/agent",

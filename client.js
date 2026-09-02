@@ -1,8 +1,9 @@
 // Zero-dependency HTTP client for the VaultBags agent surface: the public,
 // read-only REST mirror at /api/agent/* (the same data the MCP server serves).
 // No SDK, no auth, no keys, native fetch only. The Solana Agent Kit plugin in
-// index.js wraps these functions; this file is kept import-free so it can be
-// unit-tested under plain node without the framework or zod present.
+// index.js wraps these functions; this file imports nothing but a local module
+// and node's own crypto, so it can be unit-tested under plain node without the
+// framework or zod present.
 //
 // Contract mirrored verbatim from the VaultBags source of truth
 // (lib/data/agentTools AGENT_TOOLS + lib/mcpCore TOOLS): every capability is a
@@ -11,7 +12,20 @@
 // rejected server-side, so each method sends only the parameters its tool
 // actually declares.
 
+import {
+  decodeReceipt,
+  verifyReceiptSignature,
+  checkReceiptClaims,
+  paymentFieldsUsable,
+  isoFromSeconds,
+  RECEIPT_ALG,
+} from "./receipt.js";
+
 export const DEFAULT_BASE_URL = "https://vaultbags.app";
+
+// The public explorer a caller is pointed at to read a transaction themselves.
+// Named once rather than built inline wherever a link is needed.
+const SOLSCAN_URL = "https://solscan.io";
 
 // The ten signal inputs simulate_allocation accepts, all optional numbers. Any
 // other key is rejected by the server, so we allowlist here too.
@@ -77,9 +91,13 @@ export function resolveTimeoutMs(agentOrUrl) {
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_TIMEOUT_MS;
 }
 
-async function callTool(agent, restPath, params) {
+// One JSON request, carrying the timeout and the error wording every capability
+// shares. `label` is how a failure is named, and `acceptStatuses` lists the
+// non-2xx codes that are a legitimate ANSWER rather than a failure: a paid
+// resource describes its terms in a 402, which is not an error to report.
+async function requestJson(agent, path, { label, acceptStatuses = [] } = {}) {
   const base = resolveBaseUrl(agent);
-  const url = `${base}/api/agent/${restPath}${queryString(params)}`;
+  const url = `${base}${path}`;
   const timeoutMs = resolveTimeoutMs(agent);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -89,9 +107,9 @@ async function callTool(agent, restPath, params) {
   } catch (err) {
     // "AbortError" tells a caller nothing it can act on. Say what happened.
     if (err?.name === "AbortError") {
-      throw new Error(`VaultBags ${restPath}: no answer within ${timeoutMs}ms`);
+      throw new Error(`VaultBags ${label}: no answer within ${timeoutMs}ms`);
     }
-    throw new Error(`VaultBags ${restPath}: network error (${err?.message || err})`);
+    throw new Error(`VaultBags ${label}: network error (${err?.message || err})`);
   } finally {
     clearTimeout(timer);
   }
@@ -100,12 +118,17 @@ async function callTool(agent, restPath, params) {
   try {
     json = text ? JSON.parse(text) : {};
   } catch {
-    throw new Error(`VaultBags ${restPath}: non-JSON response (HTTP ${res.status})`);
+    throw new Error(`VaultBags ${label}: non-JSON response (HTTP ${res.status})`);
   }
-  if (!res.ok) {
+  if (!res.ok && !acceptStatuses.includes(res.status)) {
     const detail = json && typeof json.error === "string" ? json.error : `HTTP ${res.status}`;
-    throw new Error(`VaultBags ${restPath}: ${detail}`);
+    throw new Error(`VaultBags ${label}: ${detail}`);
   }
+  return { status: res.status, json };
+}
+
+async function callTool(agent, restPath, params) {
+  const { json } = await requestJson(agent, `/api/agent/${restPath}${queryString(params)}`, { label: restPath });
   return json;
 }
 
@@ -292,6 +315,143 @@ export function getStrategy(agent, input) {
   return callTool(agent, "strategy", { strategy });
 }
 
+// ---- Verifying a payment receipt --------------------------------------------
+
+// The wallet and asset the vault advertises for payment right now, read from
+// the paid lane's own 402 terms. Best-effort by design: the lane can be off, or
+// the base URL can point elsewhere, and neither is a reason to fail a
+// verification that otherwise held. Returns null when it cannot be read.
+async function readAdvertisedTerms(agent) {
+  try {
+    const { status, json } = await requestJson(agent, "/api/agent/ask", {
+      label: "payment terms",
+      acceptStatuses: [402],
+    });
+    if (status !== 402 || !Array.isArray(json?.accepts) || !json.accepts.length) return null;
+    const payTo = [...new Set(json.accepts.map((a) => a?.payTo).filter((v) => typeof v === "string"))];
+    const asset = [...new Set(json.accepts.map((a) => a?.asset).filter((v) => typeof v === "string"))];
+    return payTo.length && asset.length ? { payTo, asset } : null;
+  } catch {
+    return null;
+  }
+}
+
+// Verify a receipt taken from the `X-X402-Receipt` header of a paid call.
+//
+// Three legs, kept apart in the response: the SIGNATURE against the key the
+// issuer publishes (which proves who issued the receipt), the CLAIMS against
+// their own rules, and the DESTINATION against what the vault advertises for
+// payment right now. The payment itself is proven by the transaction on Solana,
+// which this package deliberately does not read: it speaks only to the public
+// HTTPS surface. So it returns the transaction and says plainly where the proof
+// lives, rather than implying a settlement it never checked.
+export async function verifyReceipt(agent, input) {
+  const receipt = typeof input?.receipt === "string" ? input.receipt.trim() : "";
+  const decoded = decodeReceipt(receipt);
+  if (!decoded.ok) {
+    return {
+      signatureValid: false,
+      issuedByVaultBags: false,
+      paymentProvenHere: false,
+      reason: decoded.reason,
+      summary: `Not a readable receipt: ${decoded.reason}.`,
+    };
+  }
+
+  const { json: jwks } = await requestJson(agent, "/.well-known/jwks.json", { label: "receipt keys" });
+  const keys = Array.isArray(jwks?.keys) ? jwks.keys : [];
+  if (!keys.length) {
+    return {
+      signatureValid: false,
+      issuedByVaultBags: false,
+      paymentProvenHere: false,
+      reason: "no signing key is published right now, so no receipt can be checked against one",
+      summary:
+        "No signing key is published, so this receipt cannot be checked here. The transaction it names can still be read on Solana.",
+    };
+  }
+
+  const signature = verifyReceiptSignature(decoded, keys);
+  if (!signature.ok) {
+    return {
+      signatureValid: false,
+      issuedByVaultBags: false,
+      paymentProvenHere: false,
+      reason: signature.reason,
+      summary: `This receipt was not signed by VaultBags: ${signature.reason}.`,
+    };
+  }
+
+  const claims = decoded.claims;
+  const checks = checkReceiptClaims(claims);
+  const claimsValid = checks.every((c) => c.pass);
+
+  const terms = await readAdvertisedTerms(agent);
+  const destination = terms
+    ? {
+        compared: true,
+        matches: terms.payTo.includes(claims.pay_to) && terms.asset.includes(claims.asset),
+        advertisedPayTo: terms.payTo,
+        advertisedAsset: terms.asset,
+      }
+    : {
+        compared: false,
+        reason: "the paid lane did not answer with its terms, so the destination was read from the receipt alone",
+      };
+
+  const failed = checks.filter((c) => !c.pass).map((c) => c.name);
+  const usable = paymentFieldsUsable(claims);
+
+  return {
+    // What this response does establish.
+    signatureValid: true,
+    signedWithKey: signature.kid,
+    algorithm: RECEIPT_ALG,
+    claimsValid,
+    checks,
+    destination,
+    // True only when nothing that COULD be checked came back wrong. A
+    // comparison that could not run counts as neither a pass nor a failure.
+    issuedByVaultBags: claimsValid && destination.matches !== false,
+
+    // What the receipt says, verbatim.
+    payment: {
+      transaction: claims.tx_hash,
+      payer: claims.payer_wallet ?? null,
+      amount: claims.amount,
+      currency: claims.currency,
+      paidTo: claims.pay_to,
+      asset: claims.asset,
+      resource: claims.resource,
+      network: claims.network,
+      receiptId: claims.jti,
+      issuedAt: isoFromSeconds(claims.iat),
+      expiresAt: isoFromSeconds(claims.exp),
+    },
+
+    // What it does NOT establish, said rather than left to be assumed.
+    paymentProvenHere: false,
+    // Built only from fields that passed validation. A receipt naming no
+    // well-formed transaction gets no lookup: assembling a link out of a value
+    // this same response just rejected would point a reader at something that
+    // is not what the link claims to be.
+    proveThePaymentYourself: usable
+      ? {
+          how: `Read transaction ${claims.tx_hash} on Solana: it must have succeeded, and moved at least ${claims.amount} atomic units of ${claims.asset} to ${claims.pay_to}${claims.payer_wallet ? `, signed by ${claims.payer_wallet}` : ""}.`,
+          explorer: `${SOLSCAN_URL}/tx/${encodeURIComponent(claims.tx_hash)}`,
+          command: "npx vaultbags-cli verify receipt <receipt>",
+        }
+      : {
+          how: "This receipt does not name a well-formed transaction, so there is nothing to look up on Solana.",
+          explorer: null,
+          command: null,
+        },
+    summary: claimsValid
+      ? `Signed by VaultBags${destination.compared && !destination.matches ? ", but it names a wallet the vault does not advertise for payment" : ""}. It says ${claims.amount} atomic units of ${claims.currency} were paid for ${claims.resource} in transaction ${claims.tx_hash}. The signature proves who issued the receipt; the transaction on Solana is what proves the payment.`
+      : `Signed by VaultBags, but its own claims do not hold: ${failed.join("; ")}.`,
+  };
+}
+
 // Named map for the plugin's `methods` object and for tests.
 export const methods = {
   getTodaysAllocation,
@@ -330,4 +490,5 @@ export const methods = {
   getRaffle,
   getStrategies,
   getStrategy,
+  verifyReceipt,
 };

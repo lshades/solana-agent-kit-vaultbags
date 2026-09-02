@@ -12,6 +12,11 @@
 // over the public REST surface (client.js); tool names, schemas and
 // descriptions mirror the VaultBags MCP server verbatim so the two never drift.
 //
+// One capability computes rather than reads: VAULTBAGS_VERIFY_RECEIPT checks
+// the signature on a payment receipt locally, against the key VaultBags
+// publishes. It still pays for nothing and signs nothing; verifying a receipt
+// is the opposite of holding a key.
+//
 // Shape (Plugin, Action, Handler) follows Solana Agent Kit v2 exactly:
 // https://github.com/sendaifun/solana-agent-kit (packages/core/src/types).
 
@@ -531,6 +536,45 @@ const verifyDecisionAction = readAction({
   run: (agent, input) => methods.verifyDecision(agent, input),
 });
 
+const verifyReceiptAction = readAction({
+  name: "VAULTBAGS_VERIFY_RECEIPT",
+  similes: [
+    "verify vaultbags receipt",
+    "check the x402 receipt i got",
+    "did i really pay vaultbags",
+    "validate the X-X402-Receipt header",
+    "is this payment receipt genuine",
+  ],
+  description:
+    "Verify a payment receipt from the X-X402-Receipt header a paid VaultBags call returns. Checks the RS256 signature against the public key VaultBags publishes at /.well-known/jwks.json (only RS256 is accepted, so a token claiming no algorithm or a symmetric one is refused before any key is read), holds every claim to its own rules (issuer, audience, expiry, a positive USDC amount, a real transaction signature, a resource of the issuer), and compares the wallet and asset it names against the ones the paid lane advertises right now. Returns what the receipt says about the payment: transaction, payer, amount, resource and receipt id. What it does NOT do is stated in the answer rather than left to be assumed: a valid signature proves VaultBags ISSUED the receipt, not that the payment settled. That proof is the transaction on Solana, so `paymentProvenHere` is always false and the transaction plus an explorer link are supplied to finish the job. This plugin never pays for anything and holds no keys.",
+  schema: z.object({
+    receipt: z
+      .string()
+      .min(20)
+      .max(8192)
+      // Three base64url parts joined by dots. No secret is shaped like this, so
+      // anything pasted here by mistake is refused by the schema before a byte
+      // of it reaches any code.
+      .regex(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/)
+      .describe("The receipt token, exactly as returned in the X-X402-Receipt response header."),
+  }),
+  example: {
+    // A placeholder, not an encoded token: an example carrying a real-looking
+    // payload invites someone to copy it, and a token-shaped literal in source
+    // is exactly what a secret scanner should refuse. Three dot-separated
+    // parts is the shape the schema requires, which is what the example is for.
+    input: { receipt: "header.claims.signature" },
+    output: {
+      signatureValid: true,
+      issuedByVaultBags: true,
+      paymentProvenHere: false,
+      payment: { amount: "50000", currency: "USDC" },
+    },
+    explanation: "Confirm a receipt really came from VaultBags, then read the transaction on Solana to prove the payment.",
+  },
+  run: (agent, input) => methods.verifyReceipt(agent, input),
+});
+
 const liquidityAction = readAction({
   name: "VAULTBAGS_GET_LIQUIDITY",
   similes: [
@@ -665,6 +709,7 @@ const VaultBagsPlugin = {
     simulateLockBoostAction,
     verifyDayAction,
     verifyDecisionAction,
+    verifyReceiptAction,
     liquidityAction,
     supplyAction,
     raffleAction,
