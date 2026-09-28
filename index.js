@@ -621,7 +621,7 @@ const raffleAction = readAction({
     "vaultbags giveaway",
   ],
   description:
-    "The public state of the holder raffle: whether a draw is open, the window it covers, the weighted ticket total, how many wallets are in it, what is being given away, and the claim grace period. Tickets are weighted by how long a holder actually held across the window rather than by a balance at one instant, so buying just before the close buys no tickets, and locked tokens count. The draw's randomness comes from a public beacon round recorded when the ticket list is frozen and emitted only after it, so the number does not exist while the list can still change, and nobody selects or times it. Aggregate only: entrants are never enumerated. Read-only.",
+    "The public state of the holder raffle: whether a draw is open, the window it covers, the weighted ticket total, how many wallets are in it, what is being given away, and the claim grace period. Tickets are weighted by how long a holder actually held across the window rather than by a balance at one instant, so buying just before the close buys no tickets, and locked tokens count. The draw's randomness comes from a public beacon round recorded when the ticket list is frozen and emitted only after it, so the number does not exist while the list can still change, and nobody selects or times it. This returns totals only. Once entries close, the frozen list (every wallet and its ticket weight) is published at /api/raffle/entries?drawId=<id>, so anyone can recompute its hash and the winners. Read-only.",
   schema: noInput,
   example: {
     output: { status: "standby", totalTickets: 9926.77, participants: 311 },
