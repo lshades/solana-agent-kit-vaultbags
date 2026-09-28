@@ -469,7 +469,7 @@ const verifyClaimAction = readAction({
   name: "VAULTBAGS_VERIFY_CLAIM",
   similes: ["verify vaultbags claim", "check a payout on-chain", "merkle proof for a claim", "was this claim honest"],
   description:
-    "Verify one holder claim against the on-chain Merkle root. Given the claim's Solana transaction signature, returns the exact committed record (wallet, gold/S&P/treasury amounts, tx), its Merkle proof, the day's root, and the on-chain Memo that stamped that root. The guarantee is on-chain, not this response: recompute the leaf hash, fold the proof to a root, and check it against the memo. Proves the payout ledger is unaltered without trusting the operator.",
+    "Verify one holder claim against the on-chain Merkle root. Given the claim's Solana transaction signature, returns the exact committed record (wallet, gold/S&P/treasury amounts, tx), its Merkle proof, the day's root, and the on-chain Memo that stamped that root. The guarantee is on-chain, not this response: recompute the leaf hash, fold the proof to a root, and check that the memo read from Solana is exactly vaultbags:claims:v1:<day>:<claims that day>:<root>, in a transaction signed by the VaultBags treasury (a wallet you hold fixed, not one this response names). Proves the payout ledger is unaltered without trusting the operator.",
   schema: z.object({
     tx: z.string().min(43).max(90).describe("The claim's Solana transaction signature (base58)."),
   }),
@@ -520,7 +520,7 @@ const verifyDecisionAction = readAction({
     "prove the agent's daily call",
   ],
   description:
-    "Verify one daily allocation decision against the hash stamped on-chain that day. Returns the exact payload the receipt commits to (the date, the three RWA weights, and the market signals the model read), the hash recomputed live from the stored record, the hash written at stamping time, the anchoring transaction, and the wallet that must have signed it. The guarantee is on-chain, not this response: serialize the committed payload canonically, sha256 it, and check it against the memo read from Solana. Proves the decision published is the decision stamped, before the vault acted on it.",
+    "Verify one daily allocation decision against the hash stamped on-chain that day. Returns the exact payload the receipt commits to (the date, the three RWA weights, and the market signals the model read), the hash recomputed live from the stored record, the hash written at stamping time, the anchoring transaction, and the wallet that must have signed it. The guarantee is on-chain, not this response: serialize the committed payload canonically, sha256 it, and check that the memo read from Solana is exactly vaultbags:alloc:v1:<date>:g<gold>s<spyx>u<usdy>:<hash>, in a transaction signed by the VaultBags treasury (a wallet you hold fixed, not one this response names). Proves the decision published is the decision stamped, before the vault acted on it.",
   schema: z.object({
     date: z
       .string()
