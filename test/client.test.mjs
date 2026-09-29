@@ -199,22 +199,27 @@ test("every declared method is a callable function", () => {
 });
 
 test("no method reaches anywhere but the agent surface of the resolved base", async () => {
+  // Every request each method makes is checked, per method: reading only the
+  // last one let a method that made none inherit the previous method's URL.
+  // The one other place a method may read is the issuer's published key set,
+  // on the same base, and only verifyReceipt reads it.
   await withFetch(
     () => jsonOk({}),
     async (seen) => {
       for (const [name, fn] of Object.entries(methods)) {
+        const before = seen.length;
         try {
           await fn("https://base.example");
         } catch {
-          // A method needing arguments may reject; the URL it tried is what
-          // this asserts, and that is already recorded.
+          // A method needing arguments may reject; the URLs it tried are what
+          // this asserts, and they are already recorded.
         }
-        const last = seen[seen.length - 1];
-        if (!last) continue;
-        assert.ok(
-          last.url.startsWith("https://base.example/api/agent/"),
-          `${name} must call the agent surface, got ${last.url}`,
-        );
+        for (const call of seen.slice(before)) {
+          const allowed =
+            call.url.startsWith("https://base.example/api/agent/") ||
+            (name === "verifyReceipt" && call.url === "https://base.example/.well-known/jwks.json");
+          assert.ok(allowed, `${name} must call the agent surface, got ${call.url}`);
+        }
       }
     },
   );
