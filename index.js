@@ -457,7 +457,7 @@ const proofOfReservesAction = readAction({
   name: "VAULTBAGS_GET_PROOF_OF_RESERVES",
   similes: ["vaultbags proof of reserves", "reserve wallets", "custody map", "on-chain reserves", "where are the reserves"],
   description:
-    "Proof of Reserves: the named on-chain wallets that hold the vault's real-world assets, the certified issuer behind each asset (Backed/xStocks, Ondo, oro), live on-chain balances and USD values, plus the daily decision receipts and lifetime value paid to holders. Every wallet and balance is public and verifiable on Solscan. Read-only.",
+    "Proof of Reserves: the named on-chain wallets that hold the vault's real-world assets, the certified issuer behind each asset (Backed/xStocks, Ondo, oro), live on-chain balances and USD values, plus the daily decision receipts and lifetime value paid to holders. Each asset also carries what its issuer can do to it (issuerControls, issuerControlsText): whether it can move or burn the token from any account, freeze accounts, pause transfers or run a program on every transfer, read live from the asset's own mint. Those are the issuers' rules, not VaultBags'; an unread mint is reported as unread, never as having no controls. Every wallet and balance is public and verifiable on Solscan. Read-only.",
   schema: noInput,
   example: {
     output: { totalReservesUsd: 565.0, reserves: [{ symbol: "GOLD", valueUsd: 188.3 }] },
