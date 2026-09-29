@@ -101,19 +101,23 @@ async function requestJson(agent, path, { label, acceptStatuses = [] } = {}) {
   const timeoutMs = resolveTimeoutMs(agent);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  // The timeout covers the whole answer, body included. It used to be cleared
+  // as soon as the headers arrived, so a server that sent them and then
+  // trickled or stalled the body held the call for as long as it liked.
   let res;
+  let text;
   try {
     res = await fetch(url, { headers: { accept: "application/json" }, signal: controller.signal });
+    text = await res.text();
   } catch (err) {
     // "AbortError" tells a caller nothing it can act on. Say what happened.
-    if (err?.name === "AbortError") {
+    if (err?.name === "AbortError" || controller.signal.aborted) {
       throw new Error(`VaultBags ${label}: no answer within ${timeoutMs}ms`);
     }
     throw new Error(`VaultBags ${label}: network error (${err?.message || err})`);
   } finally {
     clearTimeout(timer);
   }
-  const text = await res.text();
   let json;
   try {
     json = text ? JSON.parse(text) : {};

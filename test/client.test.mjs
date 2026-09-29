@@ -97,6 +97,34 @@ test("a request that never answers ends as an error, not as a wait without end",
   );
 });
 
+test("a body that stalls after the headers ends as an error too", async () => {
+  // The headers arrive at once; the body never finishes unless the signal
+  // aborts it. The timeout used to stop at the headers.
+  await withFetch(
+    (_url, init) =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          new Promise((_resolve, reject) => {
+            init.signal.addEventListener("abort", () => {
+              const e = new Error("aborted");
+              e.name = "AbortError";
+              reject(e);
+            });
+          }),
+      }),
+    async () => {
+      const started = Date.now();
+      await assert.rejects(
+        () => getTodaysAllocation({ config: { OTHER_API_KEYS: { VAULTBAGS_TIMEOUT_MS: 150 } } }),
+        (err) => /no answer within 150ms/.test(err.message),
+      );
+      assert.ok(Date.now() - started < 3000, "it must give up promptly, not wait on the body");
+    },
+  );
+});
+
 test("a signal is always attached, so no call can outlive its timeout", async () => {
   await withFetch(
     () => jsonOk({}),
