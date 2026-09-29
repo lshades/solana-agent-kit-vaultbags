@@ -143,6 +143,11 @@ export function checkReceiptClaims(claims, { nowSec = Math.floor(Date.now() / 10
         ? `expired ${nowSec - claims.exp}s ago; a receipt is a time-boxed proof, the payment itself stays readable on-chain for ever`
         : "no expiry"
   );
+  // Past its expiry is not the same as malformed: the receipt was still issued.
+  // `expired` marks that one case so a caller can say "genuine, but lapsed"
+  // instead of reading a lapsed time box as a receipt VaultBags did not issue.
+  // A receipt with no expiry at all is malformed and gets no marker.
+  if (!expOk && Number.isInteger(claims.exp)) out[out.length - 1].expired = true;
   const iatOk =
     Number.isInteger(claims.iat) &&
     claims.iat <= nowSec + IAT_TOLERANCE_SEC &&

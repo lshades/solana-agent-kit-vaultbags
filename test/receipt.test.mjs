@@ -241,6 +241,43 @@ test("terms that cannot be read leave the verdict standing, and say the comparis
   assert.equal(out.paymentProvenHere, false);
 });
 
+test("a genuine receipt past its hour reads as issued by VaultBags, and not current", async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const { jwt, keys } = issue(goodClaims({ iat: now - 7200, exp: now - 3600 }));
+  const out = await withFetch(
+    [
+      ["/.well-known/jwks.json", () => jsonReply({ keys })],
+      ["/api/agent/ask", () => jsonReply({ error: "Not found" }, 404)],
+    ],
+    () => verifyReceipt(undefined, { receipt: jwt })
+  );
+  assert.equal(out.signatureValid, true);
+  assert.equal(out.claimsValid, false, "the time box is one of its claims");
+  assert.equal(out.current, false);
+  assert.equal(out.issuedByVaultBags, true, "a lapsed time box is not a forgery");
+  assert.match(out.summary, /expired at .*no longer a live proof/);
+  assert.equal(out.paymentProvenHere, false);
+});
+
+test("a receipt with no expiry at all is not treated as merely lapsed", async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const { jwt, keys } = issue(goodClaims({ iat: now - 5, exp: undefined }));
+  const out = await withFetch([["/.well-known/jwks.json", () => jsonReply({ keys })]], () =>
+    verifyReceipt(undefined, { receipt: jwt })
+  );
+  assert.equal(out.current, false);
+  assert.equal(out.issuedByVaultBags, false);
+});
+
+test("a lapsed receipt that also breaks another claim is not issued-as-it-reads", async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const { jwt, keys } = issue(goodClaims({ iat: now - 7200, exp: now - 3600, amount: "0" }));
+  const out = await withFetch([["/.well-known/jwks.json", () => jsonReply({ keys })]], () =>
+    verifyReceipt(undefined, { receipt: jwt })
+  );
+  assert.equal(out.issuedByVaultBags, false);
+});
+
 test("a receipt naming no real transaction gets no lookup built from that field", async () => {
   // Found by probing 0.5.0: the answer used to assemble an explorer link out of
   // tx_hash even when the check on tx_hash had just failed, so a rejected value

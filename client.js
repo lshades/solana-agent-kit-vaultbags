@@ -385,6 +385,8 @@ export async function verifyReceipt(agent, input) {
   const claims = decoded.claims;
   const checks = checkReceiptClaims(claims);
   const claimsValid = checks.every((c) => c.pass);
+  // Every claim but the time box holds: the receipt is genuine and has lapsed.
+  const lapsed = !claimsValid && checks.every((c) => c.pass || c.expired);
 
   const terms = await readAdvertisedTerms(agent);
   const destination = terms
@@ -410,9 +412,15 @@ export async function verifyReceipt(agent, input) {
     claimsValid,
     checks,
     destination,
-    // True only when nothing that COULD be checked came back wrong. A
+    // Whether the receipt is inside its time box. A receipt is issued for an
+    // hour; after that it is still genuine but no longer a live proof, so a
+    // caller that accepts receipts as proof of a fresh payment must require
+    // this, not only issuedByVaultBags.
+    current: checks.some((c) => c.name === "not expired" && c.pass),
+    // Whether VaultBags issued this receipt as it reads: true only when nothing
+    // that COULD be checked came back wrong, apart from the time box. A
     // comparison that could not run counts as neither a pass nor a failure.
-    issuedByVaultBags: claimsValid && destination.matches !== false,
+    issuedByVaultBags: (claimsValid || lapsed) && destination.matches !== false,
 
     // What the receipt says, verbatim.
     payment: {
@@ -446,8 +454,8 @@ export async function verifyReceipt(agent, input) {
           explorer: null,
           command: null,
         },
-    summary: claimsValid
-      ? `Signed by VaultBags${destination.compared && !destination.matches ? ", but it names a wallet the vault does not advertise for payment" : ""}. It says ${claims.amount} atomic units of ${claims.currency} were paid for ${claims.resource} in transaction ${claims.tx_hash}. The signature proves who issued the receipt; the transaction on Solana is what proves the payment.`
+    summary: claimsValid || lapsed
+      ? `Signed by VaultBags${destination.compared && !destination.matches ? ", but it names a wallet the vault does not advertise for payment" : ""}.${lapsed ? ` It expired at ${isoFromSeconds(claims.exp) ?? "its stated expiry"}: receipts are time-boxed, so it is genuine but no longer a live proof.` : ""} It says ${claims.amount} atomic units of ${claims.currency} were paid for ${claims.resource} in transaction ${claims.tx_hash}. The signature proves who issued the receipt; the transaction on Solana is what proves the payment.`
       : `Signed by VaultBags, but its own claims do not hold: ${failed.join("; ")}.`,
   };
 }
