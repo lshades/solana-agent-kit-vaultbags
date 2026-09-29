@@ -114,3 +114,13 @@ test("every action carries enough description for a model to pick it", () => {
     );
   }
 });
+
+test("the type declarations name exactly the methods the client exports", () => {
+  // TypeScript users call what index.d.ts declares. A method missing there is
+  // a compile error for a call that works, and one declared but gone is a
+  // runtime error the types promised could not happen.
+  const dts = readFileSync(join(root, "index.d.ts"), "utf8");
+  const body = dts.slice(dts.indexOf("export interface VaultBagsMethods {"), dts.indexOf("export declare const methods"));
+  const declared = [...body.matchAll(/^  (\w+): VaultBagsMethod/gm)].map((m) => m[1]).sort();
+  assert.deepEqual(declared, Object.keys(methods).sort());
+});

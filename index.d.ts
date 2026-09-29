@@ -44,10 +44,23 @@ export interface VaultBagsMethods {
   getRecentCycles: VaultBagsMethod<{ limit?: number }>;
   getMonthlyReports: VaultBagsMethod<{ months?: number }>;
   getProofOfReserves: VaultBagsMethod;
+  getPayoutIntegrity: VaultBagsMethod;
+  /** With `days`, the tier a lock term reaches; with `wallet`, the tier it holds. Both optional. */
+  getLockTier: VaultBagsMethod<{ days?: number; wallet?: string }>;
+  /** `days` 1-365 (default 30), `points` 2-200 samples (default 60). */
+  getTreasuryHistory: VaultBagsMethod<{ days?: number; points?: number }>;
+  getHolderDistribution: VaultBagsMethod;
+  getRecentActivity: VaultBagsMethod;
   verifyClaim: VaultBagsMethod<{ tx: string }>;
   simulateLockBoost: VaultBagsMethod<{ amount?: number }>;
   verifyDay: VaultBagsMethod<{ period?: string }>;
   verifyDecision: VaultBagsMethod<{ date?: string }>;
+  getLiquidity: VaultBagsMethod;
+  getSupply: VaultBagsMethod;
+  getRaffle: VaultBagsMethod;
+  getStrategies: VaultBagsMethod;
+  /** A preset name (classic, growth, hard-money, income) or a 64-hex strategy key. */
+  getStrategy: VaultBagsMethod<{ strategy: string }>;
   /**
    * Verify a receipt from the `X-X402-Receipt` header of a paid call: the
    * signature against the issuer's published key, the claims against their own
