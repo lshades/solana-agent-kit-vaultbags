@@ -147,7 +147,8 @@ const brainVsFlatAction = readAction({
     "The honest track record: did following the vault's daily Smart Allocation line beat a fixed even 33/33/33 split? Returns the cumulative return of each, the edge between them (positive means the daily line won, negative means it lagged, reported either way), how many days have been measured, and whether there is yet enough history for a headline verdict. Derived from the vault's own asset snapshots.",
   schema: noInput,
   example: {
-    output: { available: true, brainReturn: 1.2, flatReturn: 0.8, edge: 0.4, daysMeasured: 30 },
+    // Returns are fractions (0.012 is 1.2%), as the API serves them.
+    output: { available: true, brainReturn: 0.012, flatReturn: 0.008, edge: 0.004, daysMeasured: 30 },
     explanation: "Compare the daily allocation line against an even split.",
   },
   run: (agent) => methods.getBrainVsFlat(agent),
