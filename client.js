@@ -356,6 +356,9 @@ export async function verifyReceipt(agent, input) {
     return {
       signatureValid: false,
       issuedByVaultBags: false,
+      // Stated on every answer: a receipt nothing could be checked against is
+      // not a live proof of anything.
+      current: false,
       paymentProvenHere: false,
       reason: decoded.reason,
       summary: `Not a readable receipt: ${decoded.reason}.`,
@@ -368,6 +371,9 @@ export async function verifyReceipt(agent, input) {
     return {
       signatureValid: false,
       issuedByVaultBags: false,
+      // Stated on every answer: a receipt nothing could be checked against is
+      // not a live proof of anything.
+      current: false,
       paymentProvenHere: false,
       reason: "no signing key is published right now, so no receipt can be checked against one",
       summary:
@@ -380,6 +386,9 @@ export async function verifyReceipt(agent, input) {
     return {
       signatureValid: false,
       issuedByVaultBags: false,
+      // Stated on every answer: a receipt nothing could be checked against is
+      // not a live proof of anything.
+      current: false,
       paymentProvenHere: false,
       reason: signature.reason,
       summary: `This receipt was not signed by VaultBags: ${signature.reason}.`,

@@ -331,4 +331,6 @@ test("a forged receipt and an empty key set both come back refused, never verifi
 
   const junk = await withFetch([], () => verifyReceipt(undefined, { receipt: "not-a-receipt" }));
   assert.equal(junk.signatureValid, false, "a malformed token never reaches the network");
+  // Every answer states `current`, which the tool tells callers to require.
+  for (const out of [bad, noKeys, junk]) assert.equal(out.current, false);
 });
