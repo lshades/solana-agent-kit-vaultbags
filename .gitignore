@@ -1,0 +1,8 @@
+# Credentials never belong here: environment files and npm auth.
+.env
+.env.*
+!.env.example
+.npmrc
+node_modules/
+.DS_Store
+*.log
