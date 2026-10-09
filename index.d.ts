@@ -67,6 +67,13 @@ export interface VaultBagsMethods {
    * rules, and the destination against the lane's live terms. `paymentProvenHere`
    * is always false: a signature proves who issued the receipt, the transaction
    * on Solana proves the payment.
+   *
+   * Given the `answer` and `question` received, or an export as `content`
+   * (parsed JSON or its JSON text), it also says whether that is what the
+   * payment bought: `deliveryMatches` is true when everything compared matched,
+   * and `deliveryFullyChecked` is true only when everything that can be
+   * compared was (for an answer, the answer and its question). Require both
+   * before treating the text you hold as the one paid for.
    */
   verifyReceipt: VaultBagsMethod<{ receipt: string; answer?: string; question?: string; content?: unknown }>;
 }

@@ -362,6 +362,14 @@ test("an answer delivery matches the answer and question it was for, and not one
   const both = compareDelivery(claims, { answer: ANSWER, question: `  ${QUESTION}\n` });
   assert.equal(both.answerMatches, true);
   assert.equal(both.questionMatches, true);
+  assert.equal(both.fullyChecked, true);
+  assert.deepEqual(both.notCompared, []);
+  const answerOnly = compareDelivery(claims, { answer: ANSWER });
+  assert.equal(answerOnly.answerMatches, true);
+  assert.equal(answerOnly.fullyChecked, false, "an answer without its question is not fully checked");
+  assert.match(answerOnly.notCompared.join(" "), /question was not passed/);
+  const crlf = compareDelivery(goodClaims({ delivery: { ...ANSWER_DELIVERY, question_sha256: createHash("sha256").update("line one\nline two", "utf8").digest("hex") } }), { question: "line one\r\nline two\r\n" });
+  assert.equal(crlf.questionMatches, true, "a question copied with Windows line endings still matches");
   assert.equal(compareDelivery(claims, { answer: ANSWER.replace("38%", "39%") }).answerMatches, false);
   assert.equal(compareDelivery(claims, { question: QUESTION + "!" }).questionMatches, false);
 });
@@ -372,11 +380,45 @@ test("an export delivery matches the parsed body whatever its key order", () => 
   const reordered = { n: EXPORT_BODY.n, at: EXPORT_BODY.at, a: { x: "ñ", y: 1.5 }, b: [3, 2, 1] };
   assert.equal(compareDelivery(claims, { content: reordered }).contentMatches, true);
   assert.equal(compareDelivery(claims, { content: { ...EXPORT_BODY, b: [1, 2, 3] } }).contentMatches, false);
+  const asText = compareDelivery(claims, { content: JSON.stringify(EXPORT_BODY, null, 2) });
+  assert.equal(asText.contentMatches, true, "the export's JSON text is read as the export");
+  assert.equal(asText.fullyChecked, true);
+  const notJson = compareDelivery(claims, { content: "not json" });
+  assert.equal(notJson.contentMatches, null, "text that is not JSON is not compared, never reported as different");
+  assert.match(notJson.notCompared.join(" "), /not JSON/);
+  const cyclic = { a: 1 };
+  cyclic.self = cyclic;
+  const unreadable = compareDelivery(claims, { content: cyclic });
+  assert.equal(unreadable.contentMatches, null);
+  assert.match(unreadable.notCompared.join(" "), /could not be read/);
+  const wrongKind = compareDelivery(claims, { answer: "an answer" });
+  assert.equal(wrongKind.contentMatches, null);
+  assert.match(wrongKind.notCompared.join(" "), /for an export/);
+});
+
+test("the analyst's camelCase tools are read, and an incomplete list says so", () => {
+  const out = compareDelivery(goodClaims({ delivery: { ...ANSWER_DELIVERY, tools: ["getMarketOverview", "get_market_signals"], tools_incomplete: true } }));
+  assert.equal(out.named, true);
+  assert.deepEqual(out.toolsRead, ["getMarketOverview", "get_market_signals"]);
+  assert.equal(out.toolsListComplete, false);
+  assert.equal(compareDelivery(goodClaims({ delivery: ANSWER_DELIVERY })).toolsListComplete, true);
+  const wrongKind = compareDelivery(goodClaims({ delivery: ANSWER_DELIVERY }), { content: EXPORT_BODY });
+  assert.match(wrongKind.notCompared.join(" "), /for an answer/);
+});
+
+test("a delivery in a newer format is reported as newer, never as malformed", () => {
+  for (const delivery of [{ ...ANSWER_DELIVERY, v: 2 }, { ...ANSWER_DELIVERY, kind: "image" }, { ...ANSWER_DELIVERY, extra: 1 }, { ...EXPORT_DELIVERY, content_encoding: "gzip" }]) {
+    const out = compareDelivery(goodClaims({ delivery }), { answer: ANSWER, content: EXPORT_BODY });
+    assert.equal(out.named, false, JSON.stringify(delivery));
+    assert.equal(out.newer, true);
+    assert.equal(out.malformed, undefined);
+    assert.match(out.reason, /newer/);
+  }
 });
 
 test("no delivery, or a malformed one, never reads as a match", () => {
   assert.equal(compareDelivery(goodClaims()).named, false);
-  for (const delivery of [{ ...ANSWER_DELIVERY, v: 2 }, { ...ANSWER_DELIVERY, tools: ["two words"] }, { ...EXPORT_DELIVERY, content_sha256: "00" }, null]) {
+  for (const delivery of [{ ...ANSWER_DELIVERY, v: "2" }, { ...ANSWER_DELIVERY, v: 0 }, { ...ANSWER_DELIVERY, kind: "Image!" }, { ...ANSWER_DELIVERY, tools: ["two words"] }, { ...ANSWER_DELIVERY, tools_incomplete: false }, { ...EXPORT_DELIVERY, content_sha256: "00" }, null]) {
     const out = compareDelivery(goodClaims({ delivery }), { answer: ANSWER, content: EXPORT_BODY });
     assert.equal(out.named, false, JSON.stringify(delivery));
     assert.equal(out.malformed, true);
@@ -392,6 +434,12 @@ test("the client method reports what the payment bought, and whether the caller 
   ];
   const held = await withFetch(routes, () => verifyReceipt(undefined, { receipt: jwt, answer: ANSWER, question: QUESTION }));
   assert.equal(held.deliveryMatches, true);
+  assert.equal(held.deliveryFullyChecked, true);
+  const answerOnly = await withFetch(routes, () => verifyReceipt(undefined, { receipt: jwt, answer: ANSWER }));
+  assert.equal(answerOnly.deliveryMatches, true);
+  assert.equal(answerOnly.deliveryFullyChecked, false, "the answer alone does not say what it answered");
+  assert.match(answerOnly.summary, /Not compared: the question was not passed/);
+  assert.match(answerOnly.proveThePaymentYourself.command, /^npx vaultbags-cli@0\.7\.0 verify receipt /);
   assert.equal(held.issuedByVaultBags, true);
   assert.equal(held.paymentProvenHere, false, "a matching text is still not a proven payment");
   assert.match(held.summary, /after reading get_todays_allocation, get_market_signals\. The text you hold is the one it delivered\./);

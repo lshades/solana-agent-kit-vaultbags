@@ -228,15 +228,32 @@ export function isoFromSeconds(sec) {
 // A receipt can also name what the call delivered (`delivery`): for an answer,
 // the sha256 of the question as the agent read it, of the answer exactly as
 // served, and the tools whose results it read; for an export, the sha256 of the
-// served JSON body, canonicalized (keys sorted recursively, arrays in order).
-// Signed with the payment, it lets whoever holds the text show it is what
-// VaultBags delivered for that payment. It says nothing about whether the
-// answer is right. Same rules, and the same pinned vectors, as vaultbags-cli.
+// served JSON body, canonicalized. Signed with the payment, it lets whoever
+// holds the text show it is what VaultBags delivered for that payment. It says
+// nothing about whether the answer is right, and an answer compared without
+// its question shows which answer was delivered, not what it was the answer
+// to. Same rules, and the same pinned vectors, as vaultbags-cli:
+//   question_sha256  sha256 of the question's UTF-8 bytes with the whitespace
+//                    String.prototype.trim removes taken off both ends (a
+//                    leading byte-order mark included)
+//   answer_sha256    sha256 of the answer's UTF-8 bytes exactly as served
+//   content_sha256   sha256 of the export's canonical JSON: keys sorted by
+//                    UTF-16 code unit, arrays in order, no whitespace, strings
+//                    and numbers as JSON.stringify writes them (for any JSON a
+//                    response carries, RFC 8785's canonical form)
+// The question hash is not salted: a receipt does not keep its question secret
+// from someone who can guess it.
 
 const HEX64 = /^[0-9a-f]{64}$/;
-const TOOL_NAME = /^[a-z][a-z0-9_]{0,63}$/;
+// The agent's analyst tools are camelCase (getMarketOverview), its public
+// surface snake_case (get_market_signals).
+const TOOL_NAME = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 const MAX_DELIVERY_TOOLS = 16;
+const DELIVERY_VERSION = 1;
+const ANSWER_KEYS = new Set(["v", "kind", "question_sha256", "answer_sha256", "tools", "tools_incomplete"]);
+const EXPORT_KEYS = new Set(["v", "kind", "content_sha256"]);
 const sha256Utf8 = (s) => createHash("sha256").update(s, "utf8").digest("hex");
+const withoutBom = (s) => (s.charCodeAt(0) === 0xfeff ? s.slice(1) : s);
 
 // Canonical JSON: keys sorted recursively, arrays in order, primitives via
 // JSON.stringify, undefined skipped. Kept byte-identical to the issuer's.
@@ -255,52 +272,132 @@ export function canonicalStringify(value) {
   return "{" + parts.join(",") + "}";
 }
 
-export function deliveryShapeOk(d) {
-  if (!isObject(d) || d.v !== 1) return false;
+// "ok", "malformed", or "newer": a delivery in a version or kind this plugin
+// does not know, or carrying fields it does not read. Newer is not a failure:
+// VaultBags signed something this version cannot check, and the honest answer
+// is "update and check again", never "forged".
+export function deliveryShape(d) {
+  if (!isObject(d)) return "malformed";
+  if (Number.isInteger(d.v) && d.v > DELIVERY_VERSION) return "newer";
+  if (d.v !== DELIVERY_VERSION) return "malformed";
   if (d.kind === "answer") {
-    return (
+    const known =
       HEX64.test(d.question_sha256 || "") &&
       HEX64.test(d.answer_sha256 || "") &&
       Array.isArray(d.tools) &&
       d.tools.length <= MAX_DELIVERY_TOOLS &&
       d.tools.every((t) => typeof t === "string" && TOOL_NAME.test(t)) &&
       new Set(d.tools).size === d.tools.length &&
-      (d.tools_truncated === undefined || d.tools_truncated === true)
-    );
+      (d.tools_incomplete === undefined || d.tools_incomplete === true);
+    if (!known) return "malformed";
+    return Object.keys(d).every((k) => ANSWER_KEYS.has(k)) ? "ok" : "newer";
   }
-  if (d.kind === "export") return HEX64.test(d.content_sha256 || "");
-  return false;
+  if (d.kind === "export") {
+    if (!HEX64.test(d.content_sha256 || "")) return "malformed";
+    return Object.keys(d).every((k) => EXPORT_KEYS.has(k)) ? "ok" : "newer";
+  }
+  return typeof d.kind === "string" && /^[a-z][a-z0-9_-]{0,31}$/.test(d.kind) ? "newer" : "malformed";
+}
+
+// The question as the agent hashed it; a question copied out of a Windows
+// file may carry carriage returns it never had, so that spelling is tried too.
+function questionMatches(question, expected) {
+  const plain = withoutBom(question);
+  if (sha256Utf8(plain.trim()) === expected) return true;
+  const lf = plain.replace(/\r\n/g, "\n");
+  return lf !== plain && sha256Utf8(lf.trim()) === expected;
+}
+
+// The export to compare: the parsed body, or its JSON text. Null with a reason
+// when it is neither, so a value that could not be read is never reported as
+// a body that differs.
+function readContent(content) {
+  let value = content;
+  if (typeof content === "string") {
+    try {
+      value = JSON.parse(withoutBom(content));
+    } catch {
+      return { ok: false, reason: "content is a string that is not JSON; pass the export as received" };
+    }
+  }
+  try {
+    const canonical = canonicalStringify(JSON.parse(JSON.stringify(value)));
+    if (typeof canonical !== "string") throw new Error("not serializable");
+    return { ok: true, canonical };
+  } catch {
+    return { ok: false, reason: "content could not be read as JSON (a cycle, a BigInt, or not JSON at all)" };
+  }
 }
 
 // Compare what the caller holds with what the receipt names. `answer` and
-// `question` are strings (the question's surrounding whitespace is removed, as
-// the agent does before reading it); `content` is the export as parsed JSON.
-// Each comparison is true, false, or null when nothing was given to compare
-// (or the receipt is of the other kind).
+// `question` are strings; `content` is the export as parsed JSON or as its
+// JSON text. Each comparison is true, false, or null when it could not be made
+// (nothing given, a value of the wrong type, or the receipt is of the other
+// kind), and every null that came from something the caller passed says why
+// in `notCompared`. `fullyChecked` is true only when everything the receipt
+// names that a caller can hold was compared and matched: for an answer, the
+// answer AND the question; for an export, the export.
 export function compareDelivery(claims, { answer, question, content } = {}) {
   const d = claims?.delivery;
-  if (d === undefined) return { named: false, reason: "this receipt names the payment only, not what it delivered" };
-  if (!deliveryShapeOk(d)) return { named: false, malformed: true, reason: "its delivery field is malformed" };
+  if (d === undefined) return { named: false, reason: "this receipt names the payment only, not what it delivered", fullyChecked: false };
+  const shape = deliveryShape(d);
+  if (shape === "newer") {
+    return {
+      named: false,
+      newer: true,
+      reason: "its delivery is written in a format newer than this plugin reads; update the plugin, or run npx vaultbags-cli@latest verify receipt <receipt>",
+      fullyChecked: false,
+    };
+  }
+  if (shape === "malformed") return { named: false, malformed: true, reason: "its delivery field is malformed", fullyChecked: false };
+
+  const notCompared = [];
+  const given = (value, label, type) => {
+    if (value === undefined || value === null) return false;
+    if (typeof value !== type) {
+      notCompared.push(`${label} was not a ${type}`);
+      return false;
+    }
+    return true;
+  };
+
   if (d.kind === "answer") {
+    if (content !== undefined && content !== null) notCompared.push("content was passed, but this receipt is for an answer: pass the answer text");
+    const answerMatches = given(answer, "answer", "string") ? sha256Utf8(answer) === d.answer_sha256 : null;
+    const qMatches = given(question, "question", "string") ? questionMatches(question, d.question_sha256) : null;
+    if (answerMatches !== null && qMatches === null) {
+      notCompared.push("the question was not passed: the answer shows which answer was delivered, not what it was the answer to");
+    }
     return {
       named: true,
       kind: "answer",
       toolsRead: [...d.tools],
-      toolsListComplete: d.tools_truncated !== true,
-      answerMatches: typeof answer === "string" ? sha256Utf8(answer) === d.answer_sha256 : null,
-      questionMatches: typeof question === "string" ? sha256Utf8(question.trim()) === d.question_sha256 : null,
+      toolsListComplete: d.tools_incomplete !== true,
+      answerMatches,
+      questionMatches: qMatches,
       contentMatches: null,
+      notCompared,
+      fullyChecked: answerMatches === true && qMatches === true,
     };
   }
-  let contentMatches = null;
-  if (content !== undefined) {
-    let canonical;
-    try {
-      canonical = canonicalStringify(JSON.parse(JSON.stringify(content)));
-    } catch {
-      canonical = null;
-    }
-    contentMatches = typeof canonical === "string" ? sha256Utf8(canonical) === d.content_sha256 : false;
+
+  if ((answer !== undefined && answer !== null) || (question !== undefined && question !== null)) {
+    notCompared.push("an answer or question was passed, but this receipt is for an export: pass the export as content");
   }
-  return { named: true, kind: "export", contentSha256: d.content_sha256, answerMatches: null, questionMatches: null, contentMatches };
+  let contentMatches = null;
+  if (content !== undefined && content !== null) {
+    const read = readContent(content);
+    if (read.ok) contentMatches = sha256Utf8(read.canonical) === d.content_sha256;
+    else notCompared.push(read.reason);
+  }
+  return {
+    named: true,
+    kind: "export",
+    contentSha256: d.content_sha256,
+    answerMatches: null,
+    questionMatches: null,
+    contentMatches,
+    notCompared,
+    fullyChecked: contentMatches === true,
+  };
 }

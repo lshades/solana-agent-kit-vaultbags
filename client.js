@@ -420,22 +420,33 @@ export async function verifyReceipt(agent, input) {
 
   const failed = checks.filter((c) => !c.pass).map((c) => c.name);
   const usable = paymentFieldsUsable(claims);
-  const delivery = compareDelivery(claims, {
-    answer: typeof input?.answer === "string" ? input.answer : undefined,
-    question: typeof input?.question === "string" ? input.question : undefined,
-    content: input?.content,
-  });
+  // Passed through as given: compareDelivery says why a value of the wrong
+  // type was not compared, rather than this dropping it in silence.
+  const delivery = compareDelivery(claims, { answer: input?.answer, question: input?.question, content: input?.content });
   const comparisons = [delivery.answerMatches, delivery.questionMatches, delivery.contentMatches].filter((v) => v !== null && v !== undefined);
   // True only when something was compared and all of it matched; false when
-  // anything differed; null when nothing could be compared.
+  // anything differed; null when nothing could be compared. Whether everything
+  // that CAN be compared was is deliveryFullyChecked: an answer matched without
+  // its question shows which answer was delivered, not what it answered.
   const deliveryMatches = comparisons.length ? comparisons.every(Boolean) : null;
+  const notCompared = Array.isArray(delivery.notCompared) && delivery.notCompared.length ? ` Not compared: ${delivery.notCompared.join("; ")}.` : "";
+  const tools =
+    delivery.kind !== "answer"
+      ? ""
+      : delivery.toolsRead.length
+        ? `${delivery.toolsRead.join(", ")}${delivery.toolsListComplete ? "" : " (the list is incomplete: at least one read could not be named)"}`
+        : delivery.toolsListComplete
+          ? "no tool"
+          : "tools this receipt could not name";
   const deliverySentence = !delivery.named
     ? delivery.malformed
       ? " Its delivery field is malformed, so what it says the payment bought cannot be read."
-      : ""
+      : delivery.newer
+        ? " What it says the payment bought is written in a format newer than this plugin reads; update the plugin to check it."
+        : ""
     : delivery.kind === "answer"
-      ? ` It names what the payment bought: an answer, after reading ${delivery.toolsRead.length ? delivery.toolsRead.join(", ") : "no tool"}.${deliveryMatches === true ? " The text you hold is the one it delivered." : deliveryMatches === false ? " The text you hold is NOT the one it delivered." : ""}`
-      : ` It names what the payment bought: an export with canonical sha256 ${delivery.contentSha256}.${deliveryMatches === true ? " The export you hold is the one it delivered." : deliveryMatches === false ? " The export you hold is NOT the one it delivered." : ""}`;
+      ? ` It names what the payment bought: an answer, after reading ${tools}.${deliveryMatches === true ? " The text you hold is the one it delivered." : deliveryMatches === false ? " The text you hold is NOT the one it delivered." : ""}${notCompared}`
+      : ` It names what the payment bought: an export with canonical sha256 ${delivery.contentSha256}.${deliveryMatches === true ? " The export you hold is the one it delivered." : deliveryMatches === false ? " The export you hold is NOT the one it delivered." : ""}${notCompared}`;
 
   return {
     // What this response does establish.
@@ -472,8 +483,11 @@ export async function verifyReceipt(agent, input) {
 
     // What the payment bought, as the receipt names it, and whether what the
     // caller passed in is that (null when nothing was passed to compare).
+    // A caller treating the text it holds as the one paid for requires both
+    // deliveryMatches === true and deliveryFullyChecked === true.
     delivery,
     deliveryMatches,
+    deliveryFullyChecked: delivery.fullyChecked === true,
 
     // What it does NOT establish, said rather than left to be assumed.
     paymentProvenHere: false,
@@ -485,7 +499,8 @@ export async function verifyReceipt(agent, input) {
       ? {
           how: `Read transaction ${claims.tx_hash} on Solana: it must have succeeded, and moved at least ${claims.amount} atomic units of ${claims.asset} to ${claims.pay_to}${claims.payer_wallet ? `, signed by ${claims.payer_wallet}` : ""}.`,
           explorer: `${SOLSCAN_URL}/tx/${encodeURIComponent(claims.tx_hash)}`,
-          command: "npx vaultbags-cli verify receipt <receipt>",
+          // Pinned: an older cached copy would ignore the delivery options.
+          command: "npx vaultbags-cli@0.7.0 verify receipt <receipt> --body=response.json --question=question.txt",
         }
       : {
           how: "This receipt does not name a well-formed transaction, so there is nothing to look up on Solana.",
