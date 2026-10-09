@@ -547,7 +547,7 @@ const verifyReceiptAction = readAction({
     "is this payment receipt genuine",
   ],
   description:
-    "Verify a payment receipt from the X-X402-Receipt header a paid VaultBags call returns. Checks the RS256 signature against the public key VaultBags publishes at /.well-known/jwks.json (only RS256 is accepted, so a token claiming no algorithm or a symmetric one is refused before any key is read), holds every claim to its own rules (issuer, audience, expiry, a positive USDC amount, a real transaction signature, a resource of the issuer), and compares the wallet and asset it names against the ones the paid lane advertises right now. Returns what the receipt says about the payment: transaction, payer, amount, resource and receipt id. `issuedByVaultBags` says whether VaultBags issued it as it reads; `current` says whether it is still inside its one-hour time box (a lapsed receipt is genuine but no longer a live proof, so require `current` before treating it as proof of a fresh payment). What it does NOT do is stated in the answer rather than left to be assumed: a valid signature proves VaultBags ISSUED the receipt, not that the payment settled. That proof is the transaction on Solana, so `paymentProvenHere` is always false and the transaction plus an explorer link are supplied to finish the job. This plugin never pays for anything and holds no keys.",
+    "Verify a payment receipt from the X-X402-Receipt header a paid VaultBags call returns. Checks the RS256 signature against the public key VaultBags publishes at /.well-known/jwks.json (only RS256 is accepted, so a token claiming no algorithm or a symmetric one is refused before any key is read), holds every claim to its own rules (issuer, audience, expiry, a positive USDC amount, a real transaction signature, a resource of the issuer), and compares the wallet and asset it names against the ones the paid lane advertises right now. Returns what the receipt says about the payment: transaction, payer, amount, resource and receipt id. `issuedByVaultBags` says whether VaultBags issued it as it reads; `current` says whether it is still inside its one-hour time box (a lapsed receipt is genuine but no longer a live proof, so require `current` before treating it as proof of a fresh payment). What it does NOT do is stated in the answer rather than left to be assumed: a valid signature proves VaultBags ISSUED the receipt, not that the payment settled. That proof is the transaction on Solana, so `paymentProvenHere` is always false and the transaction plus an explorer link are supplied to finish the job. A receipt can also name what the payment bought (`delivery`): for an answer, the sha256 of the question and of the answer exactly as served plus the tools the agent read for it; for an export, the canonical sha256 of the body. Pass the `answer` (and `question`) you received, or the export as `content`, and `deliveryMatches` says whether what you hold is what VaultBags delivered for that payment (null when nothing was passed). That proves the text is the one delivered, not that it is right. This plugin never pays for anything and holds no keys.",
   schema: z.object({
     receipt: z
       .string()
@@ -558,6 +558,16 @@ const verifyReceiptAction = readAction({
       // of it reaches any code.
       .regex(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/)
       .describe("The receipt token, exactly as returned in the X-X402-Receipt response header."),
+    answer: z
+      .string()
+      .max(100000)
+      .optional()
+      .describe("Optional. The answer text exactly as received (the `answer` field, or choices[0].message.content from the OpenAI-compatible endpoint)."),
+    question: z.string().max(2000).optional().describe("Optional. The question as sent."),
+    content: z
+      .unknown()
+      .optional()
+      .describe("Optional. A paid export (the ledger or the live registry batch) as the parsed JSON body received."),
   }),
   example: {
     // A placeholder, not an encoded token: an example carrying a real-looking

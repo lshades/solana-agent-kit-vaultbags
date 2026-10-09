@@ -23,7 +23,7 @@
 // the other (this one installs nothing; that one is a command), so the rules
 // live twice on purpose and are pinned by tests in both.
 
-import { createPublicKey, verify as cryptoVerify } from "node:crypto";
+import { createPublicKey, createHash, verify as cryptoVerify } from "node:crypto";
 
 export const RECEIPT_ISSUER = "vaultbags.app";
 export const RECEIPT_AUDIENCE = "vaultbags:x402-receipt";
@@ -221,4 +221,86 @@ export function isoFromSeconds(sec) {
   const ms = sec * 1000;
   if (!Number.isFinite(ms) || Math.abs(ms) > MAX_DATE_MS) return null;
   return new Date(ms).toISOString();
+}
+
+// --- What the payment bought ---------------------------------------------------
+//
+// A receipt can also name what the call delivered (`delivery`): for an answer,
+// the sha256 of the question as the agent read it, of the answer exactly as
+// served, and the tools whose results it read; for an export, the sha256 of the
+// served JSON body, canonicalized (keys sorted recursively, arrays in order).
+// Signed with the payment, it lets whoever holds the text show it is what
+// VaultBags delivered for that payment. It says nothing about whether the
+// answer is right. Same rules, and the same pinned vectors, as vaultbags-cli.
+
+const HEX64 = /^[0-9a-f]{64}$/;
+const TOOL_NAME = /^[a-z][a-z0-9_]{0,63}$/;
+const MAX_DELIVERY_TOOLS = 16;
+const sha256Utf8 = (s) => createHash("sha256").update(s, "utf8").digest("hex");
+
+// Canonical JSON: keys sorted recursively, arrays in order, primitives via
+// JSON.stringify, undefined skipped. Kept byte-identical to the issuer's.
+export function canonicalStringify(value) {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value) ?? "null";
+  }
+  if (Array.isArray(value)) {
+    return "[" + value.map((v) => canonicalStringify(v)).join(",") + "]";
+  }
+  const parts = [];
+  for (const key of Object.keys(value).sort()) {
+    if (value[key] === undefined) continue;
+    parts.push(JSON.stringify(key) + ":" + canonicalStringify(value[key]));
+  }
+  return "{" + parts.join(",") + "}";
+}
+
+export function deliveryShapeOk(d) {
+  if (!isObject(d) || d.v !== 1) return false;
+  if (d.kind === "answer") {
+    return (
+      HEX64.test(d.question_sha256 || "") &&
+      HEX64.test(d.answer_sha256 || "") &&
+      Array.isArray(d.tools) &&
+      d.tools.length <= MAX_DELIVERY_TOOLS &&
+      d.tools.every((t) => typeof t === "string" && TOOL_NAME.test(t)) &&
+      new Set(d.tools).size === d.tools.length &&
+      (d.tools_truncated === undefined || d.tools_truncated === true)
+    );
+  }
+  if (d.kind === "export") return HEX64.test(d.content_sha256 || "");
+  return false;
+}
+
+// Compare what the caller holds with what the receipt names. `answer` and
+// `question` are strings (the question's surrounding whitespace is removed, as
+// the agent does before reading it); `content` is the export as parsed JSON.
+// Each comparison is true, false, or null when nothing was given to compare
+// (or the receipt is of the other kind).
+export function compareDelivery(claims, { answer, question, content } = {}) {
+  const d = claims?.delivery;
+  if (d === undefined) return { named: false, reason: "this receipt names the payment only, not what it delivered" };
+  if (!deliveryShapeOk(d)) return { named: false, malformed: true, reason: "its delivery field is malformed" };
+  if (d.kind === "answer") {
+    return {
+      named: true,
+      kind: "answer",
+      toolsRead: [...d.tools],
+      toolsListComplete: d.tools_truncated !== true,
+      answerMatches: typeof answer === "string" ? sha256Utf8(answer) === d.answer_sha256 : null,
+      questionMatches: typeof question === "string" ? sha256Utf8(question.trim()) === d.question_sha256 : null,
+      contentMatches: null,
+    };
+  }
+  let contentMatches = null;
+  if (content !== undefined) {
+    let canonical;
+    try {
+      canonical = canonicalStringify(JSON.parse(JSON.stringify(content)));
+    } catch {
+      canonical = null;
+    }
+    contentMatches = typeof canonical === "string" ? sha256Utf8(canonical) === d.content_sha256 : false;
+  }
+  return { named: true, kind: "export", contentSha256: d.content_sha256, answerMatches: null, questionMatches: null, contentMatches };
 }

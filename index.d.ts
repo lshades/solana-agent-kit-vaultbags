@@ -68,7 +68,7 @@ export interface VaultBagsMethods {
    * is always false: a signature proves who issued the receipt, the transaction
    * on Solana proves the payment.
    */
-  verifyReceipt: VaultBagsMethod<{ receipt: string }>;
+  verifyReceipt: VaultBagsMethod<{ receipt: string; answer?: string; question?: string; content?: unknown }>;
 }
 
 /** The raw read-only methods, also exposed as the plugin's `methods`. */

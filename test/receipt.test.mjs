@@ -18,6 +18,7 @@ import {
   RECEIPT_ISSUER,
   RECEIPT_AUDIENCE,
   MAX_RECEIPT_BYTES,
+  compareDelivery,
 } from "../receipt.js";
 import { verifyReceipt } from "../client.js";
 
@@ -333,4 +334,70 @@ test("a forged receipt and an empty key set both come back refused, never verifi
   assert.equal(junk.signatureValid, false, "a malformed token never reaches the network");
   // Every answer states `current`, which the tool tells callers to require.
   for (const out of [bad, noKeys, junk]) assert.equal(out.current, false);
+});
+
+// ---- what the payment bought ------------------------------------------------
+//
+// The vectors are the ones the app and vaultbags-cli pin, recomputed
+// independently, so the issuer and both verifiers hash the same way.
+
+const QUESTION = "What did the vault buy today, and why?";
+const ANSWER = "Gold 38%, the S&P 500 31%, US Treasuries 31%. é \u{1F4C8}";
+const ANSWER_DELIVERY = {
+  v: 1,
+  kind: "answer",
+  question_sha256: "d68de484b586537e5ea59abc6c5f61ebf65f0b3b4421728f408f39fcb888218a",
+  answer_sha256: "c470451742b536cf00ce7656ec5fdc0b12ce81bdfaa93a5aef2d029a5c8d1bbc",
+  tools: ["get_todays_allocation", "get_market_signals"],
+};
+const EXPORT_DELIVERY = { v: 1, kind: "export", content_sha256: "30b00872a92d459b6f4d90215ee55fe1205e7d90d5a57073fc6e42cb0542c306" };
+const EXPORT_BODY = { b: [3, 2, 1], a: { y: 1.5, x: "ñ" }, at: "2026-10-09T00:00:00.000Z", n: 0.1 + 0.2 };
+
+test("an answer delivery matches the answer and question it was for, and not one character else", () => {
+  const claims = goodClaims({ delivery: ANSWER_DELIVERY });
+  const named = compareDelivery(claims);
+  assert.equal(named.named, true);
+  assert.deepEqual(named.toolsRead, ["get_todays_allocation", "get_market_signals"]);
+  assert.equal(named.answerMatches, null, "nothing passed, nothing compared");
+  const both = compareDelivery(claims, { answer: ANSWER, question: `  ${QUESTION}\n` });
+  assert.equal(both.answerMatches, true);
+  assert.equal(both.questionMatches, true);
+  assert.equal(compareDelivery(claims, { answer: ANSWER.replace("38%", "39%") }).answerMatches, false);
+  assert.equal(compareDelivery(claims, { question: QUESTION + "!" }).questionMatches, false);
+});
+
+test("an export delivery matches the parsed body whatever its key order", () => {
+  const claims = goodClaims({ delivery: EXPORT_DELIVERY });
+  assert.equal(compareDelivery(claims, { content: EXPORT_BODY }).contentMatches, true);
+  const reordered = { n: EXPORT_BODY.n, at: EXPORT_BODY.at, a: { x: "ñ", y: 1.5 }, b: [3, 2, 1] };
+  assert.equal(compareDelivery(claims, { content: reordered }).contentMatches, true);
+  assert.equal(compareDelivery(claims, { content: { ...EXPORT_BODY, b: [1, 2, 3] } }).contentMatches, false);
+});
+
+test("no delivery, or a malformed one, never reads as a match", () => {
+  assert.equal(compareDelivery(goodClaims()).named, false);
+  for (const delivery of [{ ...ANSWER_DELIVERY, v: 2 }, { ...ANSWER_DELIVERY, tools: ["two words"] }, { ...EXPORT_DELIVERY, content_sha256: "00" }, null]) {
+    const out = compareDelivery(goodClaims({ delivery }), { answer: ANSWER, content: EXPORT_BODY });
+    assert.equal(out.named, false, JSON.stringify(delivery));
+    assert.equal(out.malformed, true);
+  }
+});
+
+test("the client method reports what the payment bought, and whether the caller holds it", async () => {
+  const fresh = { iat: Math.floor(Date.now() / 1000) - 5, exp: Math.floor(Date.now() / 1000) + 3595 };
+  const { jwt, keys } = issue(goodClaims({ ...fresh, delivery: ANSWER_DELIVERY }));
+  const routes = [
+    ["/.well-known/jwks.json", () => jsonReply({ keys })],
+    ["/api/agent/ask", () => terms(PAY_TO, ASSET)],
+  ];
+  const held = await withFetch(routes, () => verifyReceipt(undefined, { receipt: jwt, answer: ANSWER, question: QUESTION }));
+  assert.equal(held.deliveryMatches, true);
+  assert.equal(held.issuedByVaultBags, true);
+  assert.equal(held.paymentProvenHere, false, "a matching text is still not a proven payment");
+  assert.match(held.summary, /after reading get_todays_allocation, get_market_signals\. The text you hold is the one it delivered\./);
+  const edited = await withFetch(routes, () => verifyReceipt(undefined, { receipt: jwt, answer: ANSWER + " " }));
+  assert.equal(edited.deliveryMatches, false);
+  assert.match(edited.summary, /is NOT the one it delivered/);
+  const none = await withFetch(routes, () => verifyReceipt(undefined, { receipt: jwt }));
+  assert.equal(none.deliveryMatches, null);
 });

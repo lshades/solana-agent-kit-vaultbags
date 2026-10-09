@@ -18,6 +18,7 @@ import {
   checkReceiptClaims,
   paymentFieldsUsable,
   isoFromSeconds,
+  compareDelivery,
   RECEIPT_ALG,
 } from "./receipt.js";
 
@@ -349,6 +350,9 @@ async function readAdvertisedTerms(agent) {
 // which this package deliberately does not read: it speaks only to the public
 // HTTPS surface. So it returns the transaction and says plainly where the proof
 // lives, rather than implying a settlement it never checked.
+//
+// A fourth leg, local and optional: what the receipt says the payment BOUGHT,
+// against the answer (and question) or export the caller holds.
 export async function verifyReceipt(agent, input) {
   const receipt = typeof input?.receipt === "string" ? input.receipt.trim() : "";
   const decoded = decodeReceipt(receipt);
@@ -416,6 +420,22 @@ export async function verifyReceipt(agent, input) {
 
   const failed = checks.filter((c) => !c.pass).map((c) => c.name);
   const usable = paymentFieldsUsable(claims);
+  const delivery = compareDelivery(claims, {
+    answer: typeof input?.answer === "string" ? input.answer : undefined,
+    question: typeof input?.question === "string" ? input.question : undefined,
+    content: input?.content,
+  });
+  const comparisons = [delivery.answerMatches, delivery.questionMatches, delivery.contentMatches].filter((v) => v !== null && v !== undefined);
+  // True only when something was compared and all of it matched; false when
+  // anything differed; null when nothing could be compared.
+  const deliveryMatches = comparisons.length ? comparisons.every(Boolean) : null;
+  const deliverySentence = !delivery.named
+    ? delivery.malformed
+      ? " Its delivery field is malformed, so what it says the payment bought cannot be read."
+      : ""
+    : delivery.kind === "answer"
+      ? ` It names what the payment bought: an answer, after reading ${delivery.toolsRead.length ? delivery.toolsRead.join(", ") : "no tool"}.${deliveryMatches === true ? " The text you hold is the one it delivered." : deliveryMatches === false ? " The text you hold is NOT the one it delivered." : ""}`
+      : ` It names what the payment bought: an export with canonical sha256 ${delivery.contentSha256}.${deliveryMatches === true ? " The export you hold is the one it delivered." : deliveryMatches === false ? " The export you hold is NOT the one it delivered." : ""}`;
 
   return {
     // What this response does establish.
@@ -450,6 +470,11 @@ export async function verifyReceipt(agent, input) {
       expiresAt: isoFromSeconds(claims.exp),
     },
 
+    // What the payment bought, as the receipt names it, and whether what the
+    // caller passed in is that (null when nothing was passed to compare).
+    delivery,
+    deliveryMatches,
+
     // What it does NOT establish, said rather than left to be assumed.
     paymentProvenHere: false,
     // Built only from fields that passed validation. A receipt naming no
@@ -468,7 +493,7 @@ export async function verifyReceipt(agent, input) {
           command: null,
         },
     summary: claimsValid || lapsed
-      ? `Signed by VaultBags${destination.compared && !destination.matches ? ", but it names a wallet the vault does not advertise for payment" : ""}.${lapsed ? ` It expired at ${isoFromSeconds(claims.exp) ?? "its stated expiry"}: receipts are time-boxed, so it is genuine but no longer a live proof.` : ""} It says ${claims.amount} atomic units of ${claims.currency} were paid for ${claims.resource} in transaction ${claims.tx_hash}. The signature proves who issued the receipt; the transaction on Solana is what proves the payment.`
+      ? `Signed by VaultBags${destination.compared && !destination.matches ? ", but it names a wallet the vault does not advertise for payment" : ""}.${lapsed ? ` It expired at ${isoFromSeconds(claims.exp) ?? "its stated expiry"}: receipts are time-boxed, so it is genuine but no longer a live proof.` : ""} It says ${claims.amount} atomic units of ${claims.currency} were paid for ${claims.resource} in transaction ${claims.tx_hash}.${deliverySentence} The signature proves who issued the receipt; the transaction on Solana is what proves the payment.`
       : `Signed by VaultBags, but its own claims do not hold: ${failed.join("; ")}.`,
   };
 }
