@@ -438,6 +438,9 @@ export async function verifyReceipt(agent, input) {
         : delivery.toolsListComplete
           ? "no tool"
           : "tools this receipt could not name";
+  // One sentence per thing that was compared, each naming what it was: a
+  // question that matched says nothing about the answer, and the reverse.
+  const part = (matches, yes, no) => (matches === true ? ` ${yes}` : matches === false ? ` ${no}` : "");
   const deliverySentence = !delivery.named
     ? delivery.malformed
       ? " Its delivery field is malformed, so what it says the payment bought cannot be read."
@@ -445,8 +448,19 @@ export async function verifyReceipt(agent, input) {
         ? " What it says the payment bought is written in a format newer than this plugin reads; update the plugin to check it."
         : ""
     : delivery.kind === "answer"
-      ? ` It names what the payment bought: an answer, after reading ${tools}.${deliveryMatches === true ? " The text you hold is the one it delivered." : deliveryMatches === false ? " The text you hold is NOT the one it delivered." : ""}${notCompared}`
-      : ` It names what the payment bought: an export with canonical sha256 ${delivery.contentSha256}.${deliveryMatches === true ? " The export you hold is the one it delivered." : deliveryMatches === false ? " The export you hold is NOT the one it delivered." : ""}${notCompared}`;
+      ? ` It names what the payment bought: an answer, after reading ${tools}.${part(delivery.answerMatches, "The answer you hold is the one it delivered.", "The answer you hold is NOT the one it delivered.")}${part(delivery.questionMatches, "The question you hold is the one it answered.", "The question you hold is NOT the one it answered.")}${notCompared}`
+      : ` It names what the payment bought: an export with canonical sha256 ${delivery.contentSha256}.${part(delivery.contentMatches, "The export you hold is the one it delivered.", "The export you hold is NOT the one it delivered.")}${notCompared}`;
+  // The command that checks the same receipt from a terminal, with the files
+  // this receipt's kind of delivery can be checked against. Pinned: an older
+  // cached copy would ignore the delivery options. A format newer than this
+  // plugin reads needs the newest verifier, whatever that is by then.
+  const checkCommand = delivery.newer
+    ? "npx vaultbags-cli@latest verify receipt <receipt>"
+    : !delivery.named
+      ? "npx vaultbags-cli@0.7.0 verify receipt <receipt>"
+      : delivery.kind === "answer"
+        ? "npx vaultbags-cli@0.7.0 verify receipt <receipt> --body=response.json --question=question.txt"
+        : "npx vaultbags-cli@0.7.0 verify receipt <receipt> --body=response.json";
 
   return {
     // What this response does establish.
@@ -499,8 +513,7 @@ export async function verifyReceipt(agent, input) {
       ? {
           how: `Read transaction ${claims.tx_hash} on Solana: it must have succeeded, and moved at least ${claims.amount} atomic units of ${claims.asset} to ${claims.pay_to}${claims.payer_wallet ? `, signed by ${claims.payer_wallet}` : ""}.`,
           explorer: `${SOLSCAN_URL}/tx/${encodeURIComponent(claims.tx_hash)}`,
-          // Pinned: an older cached copy would ignore the delivery options.
-          command: "npx vaultbags-cli@0.7.0 verify receipt <receipt> --body=response.json --question=question.txt",
+          command: checkCommand,
         }
       : {
           how: "This receipt does not name a well-formed transaction, so there is nothing to look up on Solana.",

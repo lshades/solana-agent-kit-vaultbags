@@ -19,6 +19,7 @@ import {
   RECEIPT_AUDIENCE,
   MAX_RECEIPT_BYTES,
   compareDelivery,
+  duplicateJsonKey,
 } from "../receipt.js";
 import { verifyReceipt } from "../client.js";
 
@@ -372,6 +373,36 @@ test("an answer delivery matches the answer and question it was for, and not one
   assert.equal(crlf.questionMatches, true, "a question copied with Windows line endings still matches");
   assert.equal(compareDelivery(claims, { answer: ANSWER.replace("38%", "39%") }).answerMatches, false);
   assert.equal(compareDelivery(claims, { question: QUESTION + "!" }).questionMatches, false);
+  const questionOnly = compareDelivery(claims, { question: QUESTION });
+  assert.equal(questionOnly.questionMatches, true);
+  assert.equal(questionOnly.answerMatches, null);
+  assert.equal(questionOnly.fullyChecked, false, "a question without its answer is not fully checked");
+  assert.match(questionOnly.notCompared.join(" "), /answer was not passed/);
+});
+
+test("export text that writes a key twice is not compared: it reads differently depending on who reads it", () => {
+  const claims = goodClaims({ delivery: EXPORT_DELIVERY });
+  const text = JSON.stringify(EXPORT_BODY);
+  const doubled = text.replace('"n":', '"n":1,"n":');
+  assert.notEqual(doubled, text);
+  assert.deepEqual(JSON.parse(doubled), JSON.parse(text), "JSON.parse reads it as the genuine export");
+  const out = compareDelivery(claims, { content: doubled });
+  assert.equal(out.contentMatches, null, "never reported as a match, nor as a difference");
+  assert.equal(out.fullyChecked, false);
+  assert.match(out.notCompared.join(" "), /twice in one object/);
+  // The same key spelled with an escape, and one nested deeper.
+  for (const body of [text.replace('"at":', '"\\u0061t":"x","at":'), text.replace('"y":', '"y":0,"y":')]) {
+    assert.doesNotThrow(() => JSON.parse(body));
+    assert.equal(compareDelivery(claims, { content: body }).contentMatches, null, body);
+  }
+  // Exact: no false alarm on what only looks like a repeat.
+  assert.equal(duplicateJsonKey('{"a":{"x":1},"b":{"x":2},"c":[{"x":3},{"x":4}]}'), null);
+  assert.equal(duplicateJsonKey('{"a":"},{\\"a\\":1,","b":"\\\\","c":"a"}'), null);
+  assert.equal(duplicateJsonKey('{"a":1,"a":2}'), "a");
+  assert.equal(duplicateJsonKey('{"o":{"k":1,"z":[{"k":1}],"k":2}}'), "k");
+  assert.equal(duplicateJsonKey('{"a\\"b":1,"a\\u0022b":2}'), 'a"b');
+  assert.equal(duplicateJsonKey(text), null);
+  assert.equal(compareDelivery(claims, { content: text }).contentMatches, true);
 });
 
 test("an export delivery matches the parsed body whatever its key order", () => {
@@ -439,13 +470,44 @@ test("the client method reports what the payment bought, and whether the caller 
   assert.equal(answerOnly.deliveryMatches, true);
   assert.equal(answerOnly.deliveryFullyChecked, false, "the answer alone does not say what it answered");
   assert.match(answerOnly.summary, /Not compared: the question was not passed/);
-  assert.match(answerOnly.proveThePaymentYourself.command, /^npx vaultbags-cli@0\.7\.0 verify receipt /);
+  assert.equal(answerOnly.proveThePaymentYourself.command, "npx vaultbags-cli@0.7.0 verify receipt <receipt> --body=response.json --question=question.txt");
+  assert.match(answerOnly.summary, /The answer you hold is the one it delivered\./);
+  assert.doesNotMatch(answerOnly.summary, /The question you hold/, "nothing is said of a question that was not compared");
   assert.equal(held.issuedByVaultBags, true);
   assert.equal(held.paymentProvenHere, false, "a matching text is still not a proven payment");
-  assert.match(held.summary, /after reading get_todays_allocation, get_market_signals\. The text you hold is the one it delivered\./);
+  assert.match(held.summary, /after reading get_todays_allocation, get_market_signals\. The answer you hold is the one it delivered\. The question you hold is the one it answered\./);
   const edited = await withFetch(routes, () => verifyReceipt(undefined, { receipt: jwt, answer: ANSWER + " " }));
   assert.equal(edited.deliveryMatches, false);
-  assert.match(edited.summary, /is NOT the one it delivered/);
+  assert.match(edited.summary, /The answer you hold is NOT the one it delivered/);
+  // A question that matched says nothing about the answer, and is not worded
+  // as if it did.
+  const questionOnly = await withFetch(routes, () => verifyReceipt(undefined, { receipt: jwt, question: QUESTION }));
+  assert.equal(questionOnly.deliveryFullyChecked, false);
+  assert.match(questionOnly.summary, /The question you hold is the one it answered\./);
+  assert.doesNotMatch(questionOnly.summary, /you hold is the one it delivered/, "the answer was not compared, so it is not called delivered");
+  assert.match(questionOnly.summary, /Not compared: the answer was not passed/);
+  const mixed = await withFetch(routes, () => verifyReceipt(undefined, { receipt: jwt, answer: ANSWER, question: QUESTION + "?" }));
+  assert.equal(mixed.deliveryMatches, false);
+  assert.match(mixed.summary, /The answer you hold is the one it delivered\. The question you hold is NOT the one it answered\./);
   const none = await withFetch(routes, () => verifyReceipt(undefined, { receipt: jwt }));
   assert.equal(none.deliveryMatches, null);
+});
+
+test("the command to check a receipt from a terminal fits what that receipt can be checked against", async () => {
+  const fresh = { iat: Math.floor(Date.now() / 1000) - 5, exp: Math.floor(Date.now() / 1000) + 3595 };
+  const routesFor = (keys) => [
+    ["/.well-known/jwks.json", () => jsonReply({ keys })],
+    ["/api/agent/ask", () => terms(PAY_TO, ASSET)],
+  ];
+  const commandFor = async (delivery) => {
+    const { jwt, keys } = issue(goodClaims({ ...fresh, ...(delivery === undefined ? {} : { delivery }) }));
+    return (await withFetch(routesFor(keys), () => verifyReceipt(undefined, { receipt: jwt }))).proveThePaymentYourself.command;
+  };
+  assert.equal(await commandFor(ANSWER_DELIVERY), "npx vaultbags-cli@0.7.0 verify receipt <receipt> --body=response.json --question=question.txt");
+  // An export has no question: the option would only come back unresolved.
+  assert.equal(await commandFor(EXPORT_DELIVERY), "npx vaultbags-cli@0.7.0 verify receipt <receipt> --body=response.json");
+  // No delivery named: nothing to pass a file for.
+  assert.equal(await commandFor(undefined), "npx vaultbags-cli@0.7.0 verify receipt <receipt>");
+  // A format newer than this plugin reads needs the newest verifier.
+  assert.equal(await commandFor({ ...ANSWER_DELIVERY, v: 2 }), "npx vaultbags-cli@latest verify receipt <receipt>");
 });

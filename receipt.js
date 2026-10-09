@@ -308,16 +308,66 @@ function questionMatches(question, expected) {
   return lf !== plain && sha256Utf8(lf.trim()) === expected;
 }
 
+// The first object key written twice in the same object, or null. `text` has
+// already parsed as JSON, so this only walks it. A key counts by what it
+// decodes to ("a" and "a" are the same key). JSON.parse keeps the LAST of
+// two equal keys and other readers keep the first, so a body that repeats one
+// reads differently depending on who reads it. Same reader as vaultbags-cli.
+export function duplicateJsonKey(text) {
+  const open = []; // one entry per open container: a Set of keys for an object, null for an array
+  let expectKey = false;
+  let i = 0;
+  while (i < text.length) {
+    const c = text[i];
+    if (c === '"') {
+      let j = i + 1;
+      while (j < text.length && text[j] !== '"') j += text[j] === "\\" ? 2 : 1;
+      if (expectKey) {
+        const key = JSON.parse(text.slice(i, j + 1));
+        const keys = open[open.length - 1];
+        if (keys.has(key)) return key;
+        keys.add(key);
+        expectKey = false;
+      }
+      i = j + 1;
+      continue;
+    }
+    if (c === "{") {
+      open.push(new Set());
+      expectKey = true;
+    } else if (c === "[") {
+      open.push(null);
+      expectKey = false;
+    } else if (c === "}" || c === "]") {
+      open.pop();
+      expectKey = false;
+    } else if (c === ",") {
+      expectKey = open[open.length - 1] instanceof Set;
+    }
+    i++;
+  }
+  return null;
+}
+
 // The export to compare: the parsed body, or its JSON text. Null with a reason
 // when it is neither, so a value that could not be read is never reported as
-// a body that differs.
+// a body that differs. Text that writes a key twice in one object is not read
+// either: which value counts depends on the reader, so nothing is concluded.
 function readContent(content) {
   let value = content;
   if (typeof content === "string") {
+    const text = withoutBom(content);
     try {
-      value = JSON.parse(withoutBom(content));
+      value = JSON.parse(text);
     } catch {
       return { ok: false, reason: "content is a string that is not JSON; pass the export as received" };
+    }
+    const repeated = duplicateJsonKey(text);
+    if (repeated !== null) {
+      return {
+        ok: false,
+        reason: `content writes the key ${JSON.stringify(repeated.slice(0, 40))} twice in one object, so it reads differently depending on who reads it`,
+      };
     }
   }
   try {
@@ -367,6 +417,9 @@ export function compareDelivery(claims, { answer, question, content } = {}) {
     const qMatches = given(question, "question", "string") ? questionMatches(question, d.question_sha256) : null;
     if (answerMatches !== null && qMatches === null) {
       notCompared.push("the question was not passed: the answer shows which answer was delivered, not what it was the answer to");
+    }
+    if (qMatches !== null && answerMatches === null) {
+      notCompared.push("the answer was not passed: the question shows which question was answered, not what the answer was");
     }
     return {
       named: true,
