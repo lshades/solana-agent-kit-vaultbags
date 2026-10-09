@@ -60,7 +60,7 @@ const today = await methods.getTodaysAllocation();
 | `VAULTBAGS_GET_AUTONOMY` | `getAutonomy()` | The vault agent's Autonomy Score and the verifiable facts behind it. |
 | `VAULTBAGS_GET_AGENT_PASSPORT` | `getAgentPassport()` | The agent's portable machine-readable passport (identity, surfaces, receipts). |
 | `VAULTBAGS_GET_RWA_PERFORMANCE` | `getRwaPerformance()` | The vault's real cost basis and return per RWA position since purchase, in USD and SOL terms. |
-| `VAULTBAGS_GET_SHADOW_VS_BRAIN` | `getShadowVsBrain()` | The shadow language model's daily calls measured against the deterministic brain. |
+| `VAULTBAGS_GET_SHADOW_VS_BRAIN` | `getShadowVsBrain()` | The shadow language model's daily calls measured against the deterministic model alone; `say` reports whether its call also leans the day's mix, and by how much at most. |
 | `VAULTBAGS_GET_RECENT_CYCLES` | `getRecentCycles({ limit? })` | The latest distribution cycles with their on-chain receipts. `limit` 1-20, default 5. |
 | `VAULTBAGS_GET_MONTHLY_REPORTS` | `getMonthlyReports({ months? })` | The agent's closed books, one per calendar month, each committed on-chain. `months` 1-24, default 12. |
 | `VAULTBAGS_GET_PAYOUT_INTEGRITY` | `getPayoutIntegrity()` | Every payout ever recorded, looked up on Solana and counted: accepted, rejected, or no longer in the answering node's history. Recomputed on read. `allLanded` is true only when every one was found AND accepted. Serves nothing rather than a figure it could not verify in full. |

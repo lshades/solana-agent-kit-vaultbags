@@ -354,7 +354,7 @@ const shadowVsBrainAction = readAction({
   name: "VAULTBAGS_GET_SHADOW_VS_BRAIN",
   similes: ["shadow analyst scoreboard", "llm vs deterministic brain", "vaultbags shadow calls"],
   description:
-    "The shadow analyst scoreboard: every day a language model makes its own allocation call from the same market signals as the deterministic brain, and this compares them honestly over time. The language model's calls never touch funds; this measures whether the deterministic approach holds up against it in public.",
+    "The shadow analyst scoreboard: every day a language model makes its own allocation call from the same market signals as the deterministic model plus the day's headlines, and this measures it against the model alone and an even split, in public, win or lose. `say` tells whether the call also leans the day's purchase mix: { share, capPoints } (the mix moves that share of the way toward the call, never more than capPoints on any asset, inside the 23-43% band), or null when it is measured only. It never chooses assets, amounts, wallets or timing.",
   schema: noInput,
   example: {
     output: { available: true, nDays: 8 },
